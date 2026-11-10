@@ -7,27 +7,40 @@ import { sessionFromRequest, type Session } from './session';
 
 const reply = (status: number, error: string) => Response.json({ error }, { status });
 
-async function authorize(req: Request, kind: Session['kind'] | null): Promise<Session> {
+async function authorize(
+  req: Request,
+  kind: Session['kind'] | null,
+  allowMustChange = false,
+): Promise<Session> {
   const s = sessionFromRequest(req);
   if (!s) throw reply(401, 'UNAUTHENTICATED');
   if (kind && s.kind !== kind) throw reply(403, 'FORBIDDEN');
   const db = await getDb();
   const [row] = await db
-    .select({ companyId: accounts.companyId, kind: accounts.kind, personActive: persons.active })
+    .select({
+      companyId: accounts.companyId,
+      kind: accounts.kind,
+      personId: accounts.personId,
+      mustChange: accounts.mustChange,
+      personActive: persons.active,
+    })
     .from(accounts)
     .leftJoin(persons, eq(persons.id, accounts.personId))
     .where(eq(accounts.id, s.accountId));
-  if (!row || row.companyId !== s.companyId || row.kind !== s.kind) throw reply(401, 'UNAUTHENTICATED');
+  if (!row || row.companyId !== s.companyId || row.kind !== s.kind || row.personId !== s.personId)
+    throw reply(401, 'UNAUTHENTICATED');
   if (s.kind === 'worker' && row.personActive !== true) throw reply(401, 'UNAUTHENTICATED');
+  if (s.kind === 'worker' && row.mustChange && !allowMustChange) throw reply(403, 'MUST_CHANGE_PIN');
   return s;
 }
 
 /** Throws a 401/403 Response when the caller is not a valid admin. */
 export const requireAdmin = (req: Request): Promise<Session> => authorize(req, 'admin');
-/** Throws a 401/403 Response when the caller is not a valid (active) worker. */
-export const requireWorker = (req: Request): Promise<Session> => authorize(req, 'worker');
+/** Throws 401/403 when not a valid (active) worker; 403 MUST_CHANGE_PIN while must_change unless allowMustChange. */
+export const requireWorker = (req: Request, opts: { allowMustChange?: boolean } = {}): Promise<Session> =>
+  authorize(req, 'worker', opts.allowMustChange);
 /** Any valid logged-in account (/api/me, /api/rev, /api/auth/secret). */
-export const requireSession = (req: Request): Promise<Session> => authorize(req, null);
+export const requireSession = (req: Request): Promise<Session> => authorize(req, null, true);
 
 /** Route wrapper: thrown Response passes through; EngineError/ZodError become 400; anything else is a 500 with no detail. */
 export function withApi<A extends unknown[]>(

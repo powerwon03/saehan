@@ -12,5 +12,7 @@ export const POST = withApi(async (req) => {
   const session = await requireSession(req);
   const body = Body.parse(await req.json().catch(() => null));
   const r = await changeSecret(await getDb(), session, body);
-  return r.ok ? Response.json({ ok: true }) : Response.json({ error: r.code }, { status: 400 });
+  if (r.ok) return Response.json({ ok: true });
+  if (r.code === 'LOCKED') return Response.json({ error: 'LOCKED', lockedUntil: r.lockedUntil }, { status: 423 });
+  return Response.json({ error: r.code }, { status: 400 });
 });

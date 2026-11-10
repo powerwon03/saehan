@@ -26,16 +26,16 @@ afterAll(() => setDbForTests(null));
 const NOW = new Date('2026-11-10T00:00:00Z');
 const min = (n: number) => new Date(NOW.getTime() + n * 60_000);
 
-async function workerSetup() {
+async function workerSetup(mustChange = true, pin = '482917', opts: { empNo?: string } = {}) {
   const s = await seedCompany(db);
   const [co] = await db.select().from(t.companies).where(eq(t.companies.id, s.companyId));
   await createAccount(db, {
     companyId: s.companyId,
     kind: 'worker',
-    loginId: '1001',
-    secret: '482917',
+    loginId: opts.empNo ?? '1001',
+    secret: pin,
     personId: s.personIds[0],
-    mustChange: true,
+    mustChange,
   });
   return { s, code: co.code };
 }
@@ -127,13 +127,36 @@ describe('login', () => {
   });
 
   test('다른 회사 코드로는 같은 사번 로그인 불가', async () => {
-    const a = await workerSetup();
+    const a = await workerSetup(true, '482917');
+    const b = await workerSetup(true, '739104');
     expect((await wl(a.code, '482917')).ok).toBe(true);
-    const other = await seedCompany(db);
-    const [oc] = await db.select().from(t.companies).where(eq(t.companies.id, other.companyId));
-    expect(await wl(oc.code, '482917')).toEqual({ ok: false, code: 'INVALID' });
+    expect((await wl(b.code, '739104')).ok).toBe(true);
+    expect(await wl(b.code, '482917')).toEqual({ ok: false, code: 'INVALID' });
+    expect(await wl(a.code, '739104')).toEqual({ ok: false, code: 'INVALID' });
     expect(await wl('no-such-company', '482917')).toEqual({ ok: false, code: 'INVALID' });
     expect(await wl(a.code, '482917', NOW, '9999')).toEqual({ ok: false, code: 'INVALID' });
+  });
+
+  test('동시 요청 폭주: 검증은 최대 5번, 잠금 유지, 늦은 정답도 LOCKED', async () => {
+    const { code, s } = await workerSetup();
+    const burst = await Promise.all([
+      ...Array.from({ length: 20 }, () => wl(code, '000111')),
+      wl(code, '482917'),
+    ]);
+    expect(burst.filter((r) => r.ok).length).toBe(0);
+    expect(burst.filter((r) => !r.ok && r.code === 'INVALID').length).toBeLessThanOrEqual(4);
+    const acc = await accountOf(s.companyId);
+    expect(acc.lockedUntil).not.toBeNull();
+    expect(acc.lockedUntil!.getTime()).toBeGreaterThan(NOW.getTime());
+    expect(await wl(code, '482917')).toMatchObject({ ok: false, code: 'LOCKED' });
+  });
+
+  test('잠금 중에는 성공 경로가 잠금을 지우지 못한다', async () => {
+    const { code, s } = await workerSetup();
+    for (let i = 0; i < 5; i++) await wl(code, '000111');
+    const before = await accountOf(s.companyId);
+    expect(await wl(code, '482917', min(1))).toMatchObject({ ok: false, code: 'LOCKED' });
+    expect((await accountOf(s.companyId)).lockedUntil).toEqual(before.lockedUntil);
   });
 
   test('관리자 로그인은 kind가 일치해야 한다', async () => {
@@ -160,6 +183,21 @@ describe('changeSecret', () => {
     expect((await wl(code, '482917')).ok).toBe(false);
   });
 
+  test('changeSecret도 current 오답 5회에 잠기고 이후 정답도 거부', async () => {
+    const { code, s } = await workerSetup();
+    const r = await wl(code, '482917');
+    if (!r.ok) throw new Error('login failed');
+    const now = new Date();
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => changeSecret(db, r.session, { current: '000111', next: '739104' })),
+    );
+    expect(results.filter((x) => !x.ok && x.code === 'INVALID').length).toBeLessThanOrEqual(4);
+    expect(results.some((x) => x.ok)).toBe(false);
+    expect(await changeSecret(db, r.session, { current: '482917', next: '739104' })).toMatchObject({ ok: false, code: 'LOCKED' });
+    expect((await accountOf(s.companyId)).lockedUntil!.getTime()).toBeGreaterThan(now.getTime());
+    expect((await wl(code, '482917', new Date())).ok).toBe(false);
+  });
+
   test('관리자 비밀번호는 8자 이상', async () => {
     const s = await seedCompany(db);
     const acc = await createAccount(db, { companyId: s.companyId, kind: 'admin', loginId: 'a1', secret: 'longpassword' });
@@ -180,7 +218,7 @@ describe('guards & routes', () => {
   });
 
   test('근무자 세션으로 /api/admin/* 호출 → 403', async () => {
-    const { s } = await workerSetup();
+    const { s } = await workerSetup(false);
     const worker = await workerSession(s);
     const adminRoute = withApi(async (req) => {
       await requireAdmin(req);
@@ -194,11 +232,35 @@ describe('guards & routes', () => {
   });
 
   test('퇴사한 근무자의 기존 세션은 401', async () => {
-    const { s } = await workerSetup();
+    const { s } = await workerSetup(false);
     const worker = await workerSession(s);
     await db.update(t.persons).set({ active: false }).where(eq(t.persons.id, s.personIds[0]));
     const wRoute = withApi(async (req) => Response.json({ p: (await requireWorker(req)).personId }));
     expect((await callRoute(wRoute, { session: worker })).status).toBe(401);
+  });
+
+  test('서명은 유효하지만 계정과 companyId/personId가 다른 세션은 401', async () => {
+    const { s } = await workerSetup(false);
+    const other = await seedCompany(db);
+    const good = await workerSession(s);
+    const wRoute = withApi(async (req) => Response.json({ p: (await requireWorker(req)).personId }));
+    expect((await callRoute(wRoute, { session: good })).status).toBe(200);
+    expect((await callRoute(wRoute, { session: { ...good, companyId: other.companyId } })).status).toBe(401);
+    expect((await callRoute(wRoute, { session: { ...good, personId: s.personIds[1] } })).status).toBe(401);
+    expect((await callRoute(wRoute, { session: { ...good, personId: null } })).status).toBe(401);
+  });
+
+  test('must_change 근무자는 allowMustChange 없이는 403 MUST_CHANGE_PIN', async () => {
+    const { s } = await workerSetup(true);
+    const worker = await workerSession(s);
+    const strict = withApi(async (req) => Response.json({ p: (await requireWorker(req)).personId }));
+    const lenient = withApi(async (req) =>
+      Response.json({ p: (await requireWorker(req, { allowMustChange: true })).personId }),
+    );
+    expect(await callRoute(strict, { session: worker })).toMatchObject({ status: 403, json: { error: 'MUST_CHANGE_PIN' } });
+    expect((await callRoute(lenient, { session: worker })).status).toBe(200);
+    // me / secret remain reachable
+    expect((await callRoute(meRoute, { session: worker })).status).toBe(200);
   });
 
   test('withApi: EngineError → 400 code, zod → BAD_INPUT, 기타 → 500 (내부 메시지 비노출)', async () => {

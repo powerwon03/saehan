@@ -21,11 +21,14 @@ export async function hashSecret(secret: string): Promise<string> {
 export async function verifySecret(secret: string, hash: string): Promise<boolean> {
   const parts = hash.split('$');
   if (parts.length !== 4 || parts[0] !== 'scrypt') return false;
-  const n = Number(parts[1]);
-  if (!Number.isInteger(n) || n < 2 || n > 1 << 20) return false;
+  if (Number(parts[1]) !== N) return false;
   const salt = Buffer.from(parts[2], 'base64');
   const expected = Buffer.from(parts[3], 'base64');
   if (salt.length === 0 || expected.length !== KEYLEN) return false;
-  const actual = await derive(secret, salt, n);
-  return timingSafeEqual(actual, expected);
+  try {
+    const actual = await derive(secret, salt, N);
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
