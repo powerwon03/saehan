@@ -122,6 +122,20 @@ describe('autoAssign', () => {
     expect(pairs(autoAssign(snap, 'f1', D, 'day', ctx()))).toEqual(['X:p1', 'Y:p2']);
   });
 
+  test('단독 가능 수는 남은 후보 기준으로 다시 센다', () => {
+    const snap = makeSnapshot({
+      posts: [line('A', 0, { defaultNeed: 2 }), line('Q', 1), line('B', 2)],
+      persons: [day('p1'), day('p2'), day('p3'), day('p7')],
+      skills: [
+        skill('p1', 'A', 3), skill('p1', 'B', 3),
+        skill('p2', 'A', 3), skill('p2', 'B', 3),
+        skill('p3', 'B', 3), skill('p3', 'Q', 3),
+        skill('p7', 'Q', 2),
+      ],
+    });
+    expect(pairs(autoAssign(snap, 'f1', D, 'day', ctx()))).toEqual(['A:p1', 'A:p2', 'B:p3', 'Q:p7']);
+  });
+
   test('단독 가능 수가 같으면 priority 높은 자리부터', () => {
     const snap = makeSnapshot({
       posts: [line('A1', 0, { priority: 0 }), line('B1', 1, { priority: 5 })],

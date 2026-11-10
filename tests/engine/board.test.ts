@@ -116,6 +116,15 @@ describe('toggleStop', () => {
   });
 });
 
+describe('toggleStop guard', () => {
+  test('다른 공장 자리는 BAD_INPUT', () => {
+    const snap = makeSnapshot({ posts: [makePost({ id: 'X', factoryId: 'f2' })] });
+    expect(() => toggleStop(snap, { ...key, postId: 'X' }, ctx())).toThrowError(
+      expect.objectContaining({ code: 'BAD_INPUT' }),
+    );
+  });
+});
+
 describe('assignPerson', () => {
   const base = () =>
     makeSnapshot({
@@ -137,6 +146,15 @@ describe('assignPerson', () => {
     const c = assignPerson(snap, { ...key, postId: 'L2', personId: 'p1' }, ctx());
     expect(c.remove.assignments).toEqual(['old']);
     expect(c.upsert.assignments).toMatchObject([{ postId: 'L2', personId: 'p1', locked: true, source: 'manual' }]);
+  });
+
+  test('다른 공장(f2) 배치에 있던 사람도 이동되고 옛 행이 삭제된다', () => {
+    const snap = base();
+    snap.posts.push(makePost({ id: 'X', factoryId: 'f2' }));
+    snap.assignments = [asg({ id: 'other', factoryId: 'f2', postId: 'X', personId: 'p1' })];
+    const c = assignPerson(snap, { ...key, postId: 'L1', personId: 'p1' }, ctx());
+    expect(c.remove.assignments).toEqual(['other']);
+    expect(c.upsert.assignments).toMatchObject([{ factoryId: 'f1', postId: 'L1', personId: 'p1', locked: true }]);
   });
 
   test('같은 자리면 아무 일도 하지 않는다', () => {
@@ -189,6 +207,32 @@ describe('swap / unassign', () => {
     const by = Object.fromEntries(rows.map((r) => [r.id, r]));
     expect(by.a1).toMatchObject({ personId: 'p1', postId: 'L2', locked: true, source: 'manual' });
     expect(by.a2).toMatchObject({ personId: 'p2', postId: 'L1', locked: true, source: 'manual' });
+  });
+
+  test('swap: 옮겨 간 자리 기준으로 flags를 다시 계산한다', () => {
+    const s = makeSnapshot({
+      posts: [line('L1'), makePost({ id: 'L2', code: 'L2', kind: 'line', sort: 1, role: 'R' })],
+      persons: [makePerson({ id: 'p1' }), makePerson({ id: 'p2', empNo: '2', role: 'R' })],
+      skills: [
+        { personId: 'p1', postId: 'L1', level: 3 },
+        { personId: 'p2', postId: 'L2', level: 3 },
+      ],
+      experience: { p1: { post: { L1: 40 }, product: {} }, p2: { post: { L2: 40 }, product: {} } },
+      assignments: [
+        asg({ id: 'a1', postId: 'L1', personId: 'p1', flags: [] }),
+        asg({ id: 'a2', postId: 'L2', personId: 'p2', flags: [] }),
+      ],
+    });
+    const rows = swap(s, { assignmentIdA: 'a1', assignmentIdB: 'a2' }, ctx()).upsert.assignments as Assignment[];
+    const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect([...by.a1.flags].sort()).toEqual(['low-skill', 'no-exp', 'role']);
+    expect([...by.a2.flags].sort()).toEqual(['low-skill', 'no-exp']);
+  });
+
+  test('swap: 같은 배치 둘을 주면 BAD_INPUT', () => {
+    expect(() => swap(snap(), { assignmentIdA: 'a1', assignmentIdB: 'a1' }, ctx())).toThrowError(
+      expect.objectContaining({ code: 'BAD_INPUT' }),
+    );
   });
 
   test('swap: 교대가 다르면 BAD_INPUT', () => {

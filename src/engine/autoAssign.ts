@@ -146,17 +146,27 @@ export function autoAssign(snap: Snapshot, factoryId: string, date: DateStr, shi
     if (list && i >= 0) place(personId, list.splice(i, 1)[0]);
   }
 
-  // 2) remaining posts: fewest single-capable candidates first, then priority desc, then sort asc
-  const singleCapable = (postId: string) =>
-    pool.filter((id) => skillLevel(snap, id, postId) >= SINGLE_CAPABLE_LEVEL).length;
-  const order = [...slotsByPost.entries()]
-    .filter(([, list]) => list.length > 0)
-    .map(([postId, list]) => ({ post: snap.posts.find((p) => p.id === postId)!, list, capable: singleCapable(postId) }))
-    .sort((a, b) => a.capable - b.capable || b.post.priority - a.post.priority || a.post.sort - b.post.sort);
-
-  for (const { post, list } of order) {
+  // 2) remaining posts: fewest single-capable candidates first (recounted against the current pool),
+  //    then priority desc, then sort asc
+  const singleCapable = (postId: string, gender: Slot['gender']) =>
+    pool.filter(
+      (id) =>
+        skillLevel(snap, id, postId) >= SINGLE_CAPABLE_LEVEL &&
+        (gender === null || snap.persons.find((p) => p.id === id)?.gender === gender),
+    ).length;
+  const remaining = [...slotsByPost.entries()].filter(([, list]) => list.length > 0);
+  while (remaining.length > 0 && pool.length > 0) {
+    const ranked = remaining
+      .map((entry) => ({
+        entry,
+        post: snap.posts.find((p) => p.id === entry[0])!,
+        capable: singleCapable(entry[0], entry[1][0].gender),
+      }))
+      .sort((a, b) => a.capable - b.capable || b.post.priority - a.post.priority || a.post.sort - b.post.sort);
+    const { entry, post } = ranked[0];
+    remaining.splice(remaining.indexOf(entry), 1);
     const productId = plan.get(post.id)?.productId ?? null;
-    for (const slot of list) {
+    for (const slot of entry[1]) {
       let best: { id: string; score: number } | null = null;
       for (const id of pool) {
         if (!genderOk(id, slot)) continue;

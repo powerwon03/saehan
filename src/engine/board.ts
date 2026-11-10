@@ -76,6 +76,10 @@ export function setPlan(
 }
 
 export function toggleStop(snap: Snapshot, input: Key & { postId: string }, _ctx: Ctx): Changes {
+  const post = snap.posts.find((p) => p.id === input.postId);
+  if (!post || post.factoryId !== input.factoryId) {
+    throw new EngineError('BAD_INPUT', `post ${input.postId} not in factory ${input.factoryId}`);
+  }
   const changes = emptyChanges();
   const board = findBoard(snap, input) ?? draftBoard(snap, input);
   const stopping = !board.stoppedPostIds.includes(input.postId);
@@ -137,13 +141,26 @@ export function swap(snap: Snapshot, input: { assignmentIdA: string; assignmentI
   const a = snap.assignments.find((x) => x.id === input.assignmentIdA);
   const b = snap.assignments.find((x) => x.id === input.assignmentIdB);
   if (!a || !b) throw new EngineError('BAD_INPUT', 'assignment not found');
+  if (a.id === b.id) throw new EngineError('BAD_INPUT', 'cannot swap an assignment with itself');
   if (a.date !== b.date || a.shift !== b.shift) throw new EngineError('BAD_INPUT', 'assignments differ in date or shift');
 
   const changes = emptyChanges();
-  changes.upsert.assignments = [
-    { ...a, postId: b.postId, factoryId: b.factoryId, locked: true, source: 'manual' },
-    { ...b, postId: a.postId, factoryId: a.factoryId, locked: true, source: 'manual' },
-  ];
+  const moved = (row: Assignment, to: Assignment): Assignment => {
+    const slot = computeSlots(snap, to.factoryId, row.date, row.shift).find((s) => s.postId === to.postId) ?? {
+      postId: to.postId,
+      index: 0,
+      gender: null,
+    };
+    return {
+      ...row,
+      postId: to.postId,
+      factoryId: to.factoryId,
+      locked: true,
+      source: 'manual',
+      flags: flagsFor(snap, row.personId, to.postId, slot, row.date),
+    };
+  };
+  changes.upsert.assignments = [moved(a, b), moved(b, a)];
   return changes;
 }
 
