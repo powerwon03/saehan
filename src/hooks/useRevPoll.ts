@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { timeoutSignal } from './timeoutSignal';
 
 const INTERVAL_MS = 4_000;
 /** A hung /api/rev is aborted after this long so the in-flight guard is released and polling goes on. */
@@ -24,8 +25,9 @@ export function useRevPoll(onChange: () => void, enabled = true): void {
     const poll = async () => {
       if (inFlight) return; // the previous request is still pending: skip this tick instead of stacking fetches
       inFlight = true;
+      const timeout = timeoutSignal(TIMEOUT_MS);
       try {
-        const res = await fetch('/api/rev', { cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) });
+        const res = await fetch('/api/rev', { cache: 'no-store', signal: timeout.signal });
         if (!res.ok || !alive) return;
         const { rev } = (await res.json()) as { rev: number };
         if (!alive) return;
@@ -34,6 +36,7 @@ export function useRevPoll(onChange: () => void, enabled = true): void {
       } catch {
         /* offline or timed out: try again next tick */
       } finally {
+        timeout.clear();
         inFlight = false;
       }
     };

@@ -2,12 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRevPoll } from '@/hooks/useRevPoll';
 import { api } from '@/lib/api';
+import { useRevChange } from './RevContext';
 
 /**
  * GET `path` for an admin screen: data (null while the first load runs), the error code of a failed load, and
- * reload. 401 goes to /login. With `poll`, refetches whenever the company revision changes (other admins, workers).
+ * reload. 401 goes to /login. With `poll`, refetches whenever the company revision changes (other admins, workers),
+ * through the admin layout's one shared /api/rev poller.
  * `path` null = nothing to load yet.
  */
 export function useAdminData<T>(path: string | null, poll = true): { data: T | null; failed: string | null; reload: () => Promise<void> } {
@@ -31,7 +32,7 @@ export function useAdminData<T>(path: string | null, poll = true): { data: T | n
   useEffect(() => {
     void reload(); // a new path keeps showing the previous data until its own arrives (no flash while typing)
   }, [reload]);
-  useRevPoll(reload, poll && data !== null);
+  useRevChange(reload, poll && data !== null);
 
   return { data, failed, reload };
 }

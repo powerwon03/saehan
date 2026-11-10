@@ -5,12 +5,12 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { AbsencePanel } from '@/components/admin/absence/AbsencePanel';
 import { BoardContext, type BoardCtx, type FactoryRow } from '@/components/admin/board/BoardContext';
 import { BoardHeader, type BoardQuery } from '@/components/admin/board/BoardHeader';
+import { useRevChange } from '@/components/admin/common/RevContext';
 import { LINE_GRID, LineRow } from '@/components/admin/board/LineRow';
 import type { BoardAction } from '@/components/admin/board/logic';
 import { Summary } from '@/components/admin/board/Summary';
 import { errorText } from '@/components/admin/labels';
 import { useToast } from '@/components/admin/Toast';
-import { useRevPoll } from '@/hooks/useRevPoll';
 import { api } from '@/lib/api';
 import type { BoardView } from '@/server/views/boardView';
 
@@ -48,7 +48,7 @@ function Board() {
   useEffect(() => {
     void api<{ rows: FactoryRow[] }>('/api/admin/master/factories').then((r) => r.ok && setFactories(r.data.rows));
   }, []);
-  useRevPoll(load, view !== null);
+  useRevChange(load, view !== null);
 
   useEffect(() => {
     if (!view) return;

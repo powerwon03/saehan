@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, send } from '@/lib/api';
 import { strongEnough, suggestEmpNo } from '@/lib/personRules';
@@ -31,6 +32,7 @@ export function PersonForm({
   onDone: () => Promise<void>;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const toast = useToast();
   const creating = person === null;
   const [form, setForm] = useState<Form>(() => (person ? formFromPerson(person) : emptyForm(factoryList[0]?.id ?? '', '')));
@@ -60,6 +62,7 @@ export function PersonForm({
       ? await send<{ person: PersonRow }>('POST', '/api/admin/persons', createPayload(form))
       : await send<{ person: PersonRow }>('PATCH', `/api/admin/persons/${person.id}`, patchPayload(form));
     setBusy(false);
+    if (!r.ok && r.status === 401) return router.replace('/login');
     if (!r.ok) return setError({ code: r.code, pin: r.code === 'WEAK_SECRET' });
     if (creating) toast(`${r.data.person.name} · 사번 ${r.data.person.empNo}로 등록했어요`);
     await onDone();

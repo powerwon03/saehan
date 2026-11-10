@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { send } from '@/lib/api';
 import { Field } from '../common/Field';
@@ -30,6 +31,7 @@ function Group({ title, hint, children }: { title: string; hint: string; childre
 
 /** Every setting in five groups, saved as one full object (PUT); BAD_INPUT shows next to the 저장 button. */
 export function SettingsForm({ initial, onSaved }: { initial: SettingsValues; onSaved: () => Promise<void> }) {
+  const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<Form>(() => formFromSettings(initial));
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function SettingsForm({ initial, onSaved }: { initial: SettingsValues; on
     setError(null);
     const r = await send('PUT', '/api/admin/settings', settingsPayload(form));
     setBusy(false);
+    if (!r.ok && r.status === 401) return router.replace('/login');
     if (!r.ok) return setError(r.code);
     toast('설정을 저장했어요');
     await onSaved();

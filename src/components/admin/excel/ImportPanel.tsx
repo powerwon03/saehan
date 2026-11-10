@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { send } from '@/lib/api';
 import type { ImportPreview } from '@/server/excel/detect';
@@ -20,6 +21,7 @@ function upload<T>(file: File, mode: 'preview' | 'commit') {
 
 /** Upload → preview (추가 N · 수정 M · 오류 K + rows, or the sample of an unknown file) → 「저장」 (same file, commit). */
 export function ImportPanel() {
+  const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -43,6 +45,7 @@ export function ImportPanel() {
     const r = await upload<ImportPreview>(f, 'preview');
     setBusy(false);
     if (r.ok) setPreview(r.data);
+    else if (r.status === 401) router.replace('/login');
     else setError(r.code);
   };
 
@@ -52,6 +55,7 @@ export function ImportPanel() {
     setError(null);
     const r = await upload<Committed>(file, 'commit');
     setBusy(false);
+    if (!r.ok && r.status === 401) return router.replace('/login');
     if (!r.ok) return setError(r.code);
     setDone(r.data);
     reset();
