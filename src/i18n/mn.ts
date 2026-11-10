@@ -123,6 +123,7 @@ export const mn: Record<keyof typeof ko, string> = {
   'error.NIGHT_BEFORE_DAY': 'Өмнөх шөнө ажилласан',
   'error.DAY_AFTER_NIGHT': 'Дараа өдөр нь өдрийн ээлжтэй',
   'error.WEEK_HOURS': 'Энэ долоо хоногийн цаг хэтэрнэ',
+  'error.CRON_DISABLED': 'Товлосон ажил унтраалттай байна',
   'error.NETWORK': 'Интернэт холболтоо шалгана уу',
 
   'msg.absenceReported': 'Тасалсан тухай мэдэгдэл ирлээ',

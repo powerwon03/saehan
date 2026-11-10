@@ -56,7 +56,7 @@ describe('dictionaries', () => {
 
 describe('error codes', () => {
   test('서버 오류 코드 전부(EngineError·login 코드 목록 상수)에 사전 키가 있다', () => {
-    expect(ERROR_CODES.length).toBe(25);
+    expect(ERROR_CODES.length).toBe(26);
     for (const code of ERROR_CODES) expect(Object.keys(ko), code).toContain(`error.${code}`);
   });
 

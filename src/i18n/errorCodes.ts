@@ -29,6 +29,7 @@ export const ERROR_CODES = [
   'NIGHT_BEFORE_DAY',
   'DAY_AFTER_NIGHT',
   'WEEK_HOURS',
+  'CRON_DISABLED',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

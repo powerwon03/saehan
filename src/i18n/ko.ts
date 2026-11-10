@@ -121,6 +121,7 @@ export const ko = {
   'error.NIGHT_BEFORE_DAY': '전날 야간 근무를 해서 안 돼요',
   'error.DAY_AFTER_NIGHT': '다음 날 주간 근무가 있어서 안 돼요',
   'error.WEEK_HOURS': '이번 주 근무 시간이 넘쳐요',
+  'error.CRON_DISABLED': '예약 작업이 꺼져 있어요',
   'error.NETWORK': '인터넷 연결을 확인해 주세요',
 
   'msg.absenceReported': '결근 신고가 들어왔어요',

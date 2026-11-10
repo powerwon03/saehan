@@ -123,6 +123,7 @@ export const vi: Record<keyof typeof ko, string> = {
   'error.NIGHT_BEFORE_DAY': 'Đã làm ca đêm hôm trước',
   'error.DAY_AFTER_NIGHT': 'Hôm sau có ca ngày',
   'error.WEEK_HOURS': 'Quá giờ làm trong tuần',
+  'error.CRON_DISABLED': 'Tác vụ định kỳ đang tắt',
   'error.NETWORK': 'Hãy kiểm tra kết nối mạng',
 
   'msg.absenceReported': 'Có người báo vắng',

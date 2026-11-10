@@ -122,6 +122,7 @@ export const en: Record<keyof typeof ko, string> = {
   'error.NIGHT_BEFORE_DAY': 'Worked the night before',
   'error.DAY_AFTER_NIGHT': 'Has a day shift the next day',
   'error.WEEK_HOURS': 'Too many hours this week',
+  'error.CRON_DISABLED': 'Scheduled job is turned off',
   'error.NETWORK': 'Check your internet connection',
 
   'msg.absenceReported': 'An absence was reported',

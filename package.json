@@ -10,9 +10,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "company:create": "tsx scripts/create-company.ts",
-    "seed:demo": "tsx scripts/seed-demo.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
+    "company:create": "tsx --env-file-if-exists=.env.local scripts/create-company.ts",
+    "seed:demo": "tsx --env-file-if-exists=.env.local scripts/seed-demo.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",
