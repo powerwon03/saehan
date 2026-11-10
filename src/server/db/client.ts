@@ -25,7 +25,8 @@ const g = globalThis as typeof globalThis & { __onetouchDb?: Promise<Opened> };
 
 /**
  * `DATABASE_URL` set → postgres-js (`prepare: false`, Supabase pooler compatible).
- * Otherwise PGlite at `$PGLITE_DIR` (default `./.data/pglite`), migrated on first call. Cached on globalThis (Next dev hot reload).
+ * Otherwise, outside production, PGlite at `$PGLITE_DIR` (default `./.data/pglite`), migrated on first call; in production
+ * a missing `DATABASE_URL` throws. Cached on globalThis (Next dev hot reload).
  */
 export async function getDb(): Promise<DB> {
   if (testDb) return testDb;
@@ -56,18 +57,30 @@ function opened(): Promise<Opened> {
 
 async function open(): Promise<Opened> {
   const url = process.env.DATABASE_URL;
-  if (url) {
-    const { default: postgres } = await import('postgres');
-    const { drizzle } = await import('drizzle-orm/postgres-js');
-    const { migrate } = await import('drizzle-orm/postgres-js/migrator');
-    const client = postgres(url, { prepare: false });
-    const db = drizzle(client, { schema });
-    return { db, close: () => client.end(), migrate: () => migrate(db, { migrationsFolder: MIGRATIONS }) };
+  if (url) return openPostgres(url);
+  if (process.env.NODE_ENV === 'production') {
+    // a deployment without its connection string must fail loudly, not run on a throwaway local PGlite
+    throw new Error('DATABASE_URL is not set: production needs a Postgres connection string (see .env.example)');
   }
   const localDir = process.env.PGLITE_DIR || DEFAULT_LOCAL_DIR;
   mkdirSync(localDir, { recursive: true });
   const { db, close } = await openPglite(localDir);
   return { db, close, migrate: async () => {} };
+}
+
+/**
+ * postgres-js database (the production driver), not migrated. `npm run test:pg` runs it against a PGlite socket
+ * server with `max: 1`: that server multiplexes connections onto one PGlite session message by message, which is only
+ * safe for one connection at a time.
+ */
+export async function openPostgres(url: string, opts: { max?: number } = {}): Promise<Opened> {
+  const { default: postgres } = await import('postgres');
+  const { drizzle } = await import('drizzle-orm/postgres-js');
+  const { migrate } = await import('drizzle-orm/postgres-js/migrator');
+  // prepare: false for the Supabase transaction pooler; a small pool per serverless instance; fail fast when unreachable.
+  const client = postgres(url, { prepare: false, max: opts.max ?? 5, idle_timeout: 20, connect_timeout: 10 });
+  const db = drizzle(client, { schema });
+  return { db, close: () => client.end(), migrate: () => migrate(db, { migrationsFolder: MIGRATIONS }) };
 }
 
 /** PGlite database (in-memory when dataDir is omitted) with all migrations applied. */

@@ -95,11 +95,14 @@ select cron.schedule(
 
 ```bash
 npm test             # Vitest (엔진 단위, PGlite 서버·API, 6일 연속 흐름)
+npm run test:pg      # DB·배치·근무자 API 테스트를 운영 드라이버(postgres-js)로 (PGlite 소켓 서버, Postgres 설치 불필요)
 npm run typecheck    # tsc --noEmit
 npm run build        # 운영 빌드
 ```
 
-`npm run start`로 빌드 결과를 띄울 때도 `SESSION_SECRET`이 필요합니다.
+`npm run start`로 빌드 결과를 띄울 때도 `SESSION_SECRET`이 필요하고, 운영 모드에서는 `DATABASE_URL`도 반드시 있어야 합니다(없으면 PGlite로 넘어가지 않고 오류로 멈춥니다).
+
+`npm run test:pg`는 테스트 안에서 PGlite를 Postgres 통신 규약으로 띄우고(`@electric-sql/pglite-socket`), 운영과 같은 postgres-js 연결·마이그레이터로 `tests/server/db.test.ts`, `board-api.test.ts`, `worker-api.test.ts`를 돌립니다. 이 소켓 서버는 여러 연결을 한 PGlite 세션에 메시지 단위로 섞기 때문에 테스트 연결은 1개(`max: 1`)로 씁니다. 그래서 동시 요청 테스트는 드라이버 경로를 확인할 뿐, 실제 Postgres의 행 잠금 경쟁까지 재현하지는 않습니다.
 
 ## 회사 확인이 필요한 가정값
 

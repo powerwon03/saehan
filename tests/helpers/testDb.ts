@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { openPglite, type DB } from '@/server/db/client';
+import { inject } from 'vitest';
+import { openPglite, openPostgres, type DB } from '@/server/db/client';
 import * as t from '@/server/db/schema';
 
-/** Fresh in-memory PGlite with all migrations applied. Create one per test file (seed a company per test). */
+/**
+ * Fresh in-memory PGlite with all migrations applied. Create one per test file (seed a company per test).
+ * Under `npm run test:pg` (TEST_DRIVER=postgres) it is instead a postgres-js client of the shared, already migrated
+ * PGlite socket server (tests/setup/pgServer.ts); tests stay isolated by seeding their own company.
+ */
 export async function createTestDb(): Promise<DB> {
+  if (process.env.TEST_DRIVER === 'postgres') return (await openPostgres(inject('pgUrl'), { max: 1 })).db;
   return (await openPglite()).db;
 }
 

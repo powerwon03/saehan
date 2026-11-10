@@ -288,6 +288,27 @@ describe('guards & routes', () => {
     }
   });
 
+  test('withApi: 예상 못한 오류는 서버 로그에 name·message·code·cause를 남기고 응답은 INTERNAL만', async () => {
+    const boom = withApi(async () => {
+      const cause = Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:6543'), { code: 'ECONNREFUSED' });
+      throw Object.assign(new Error('query failed', { cause }), { name: 'PostgresError', code: '08006' });
+    });
+    const logged: unknown[][] = [];
+    const orig = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      const r = await callRoute(boom);
+      expect(r).toMatchObject({ status: 500, json: { error: 'INTERNAL' } });
+      expect(JSON.stringify(r.json)).not.toContain('ECONNREFUSED');
+    } finally {
+      console.error = orig;
+    }
+    const line = JSON.stringify(logged);
+    for (const part of ['PostgresError', 'query failed', '08006', 'ECONNREFUSED', 'connect ECONNREFUSED 10.0.0.1:6543']) {
+      expect(line).toContain(part);
+    }
+  });
+
   test('login/me/rev/secret/logout 라우트 흐름', async () => {
     const { code } = await workerSetup();
     const bad = await callRoute(loginRoute, { body: { company: code, kind: 'worker', loginId: '1001', secret: '000111' } });

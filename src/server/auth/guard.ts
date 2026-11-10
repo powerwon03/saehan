@@ -53,8 +53,23 @@ export function withApi<A extends unknown[]>(
       if (e instanceof Response) return e;
       if (e instanceof EngineError) return reply(e.code === 'FORBIDDEN' ? 403 : 400, e.code);
       if (e instanceof ZodError) return reply(400, 'BAD_INPUT');
-      console.error('[api] unhandled error:', e instanceof Error ? e.name : typeof e);
+      console.error('[api] unhandled error:', describeError(e));
       return reply(500, 'INTERNAL');
     }
+  };
+}
+
+type Coded = { name?: unknown; message?: unknown; code?: unknown; cause?: unknown };
+
+/** Server-log summary of an unexpected error (name, message, code, cause code/message); never sent to the client. */
+function describeError(e: unknown): Record<string, unknown> {
+  if (!(e instanceof Error)) return { type: typeof e };
+  const { code, cause } = e as Coded;
+  const c = (typeof cause === 'object' && cause !== null ? cause : {}) as Coded;
+  return {
+    name: e.name,
+    message: e.message,
+    code,
+    cause: cause === undefined ? undefined : { code: c.code, message: c.message ?? String(cause) },
   };
 }
