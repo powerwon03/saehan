@@ -13,7 +13,8 @@ type PersonRow = typeof t.persons.$inferSelect;
 
 export { suggestEmpNo } from '@/lib/personRules';
 
-const pin = z.string().refine((p) => strongEnough('worker', p));
+// shape only: the PIN rule is checked in createPerson / accountAction so a weak PIN answers WEAK_SECRET, not BAD_INPUT
+const pin = z.string().max(100);
 const text = z.string().trim().min(1).max(100);
 const optText = z.string().trim().max(100).nullable().optional();
 
@@ -49,6 +50,9 @@ export const AccountBody = z.discriminatedUnion('action', [
 ]);
 
 const bad = (msg: string) => new EngineError('BAD_INPUT', msg);
+function assertStrongPin(p: string): void {
+  if (!strongEnough('worker', p)) throw new EngineError('WEAK_SECRET');
+}
 
 async function assertFactory(tx: Tx, companyId: string, factoryId: string): Promise<void> {
   const [r] = await tx.select({ id: t.factories.id }).from(t.factories).where(and(eq(t.factories.id, factoryId), eq(t.factories.companyId, companyId)));
@@ -84,6 +88,7 @@ export async function listPersons(
 }
 
 export async function createPerson(tx: Tx, companyId: string, input: z.infer<typeof CreatePerson>): Promise<PersonRow> {
+  assertStrongPin(input.pin);
   await assertFactory(tx, companyId, input.factoryId);
   if (input.fixedPostId) await assertPost(tx, companyId, input.fixedPostId);
   let empNo = input.empNo;
@@ -210,6 +215,7 @@ export async function listWorkerAccounts(tx: Tx, companyId: string) {
 }
 
 export async function accountAction(tx: Tx, companyId: string, a: z.infer<typeof AccountBody>): Promise<void> {
+  if (a.action === 'resetPin') assertStrongPin(a.pin);
   await getPerson(tx, companyId, a.personId);
   const where = and(eq(t.accounts.companyId, companyId), eq(t.accounts.personId, a.personId), eq(t.accounts.kind, 'worker'));
   const set =

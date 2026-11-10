@@ -6,7 +6,7 @@ import { DELETE as masterDelete, GET as masterGet, PATCH as masterPatch, POST as
 import { DELETE as personDelete, PATCH as personPatch, POST as personAction } from '@/app/api/admin/persons/[id]/route';
 import { GET as personsGet, POST as personsPost } from '@/app/api/admin/persons/route';
 import { GET as settingsGet, PUT as settingsPut } from '@/app/api/admin/settings/route';
-import { POST as skillsPost } from '@/app/api/admin/skills/route';
+import { GET as skillsGet, POST as skillsPost } from '@/app/api/admin/skills/route';
 import { skillLevel } from '@/engine/skill';
 import { createAccount } from '@/server/auth/accounts';
 import { verifySecret } from '@/server/auth/hash';
@@ -74,8 +74,9 @@ describe('persons', () => {
   test('약한 PIN·다른 회사 공장·중복 사번은 거절', async () => {
     const { s, adm, other } = await setup();
     const post = (b: object) => callRoute(personsPost, { url: `${U}/persons`, session: adm, body: b });
-    expect((await post(newPerson(s, { pin: '111111' }))).json.error).toBe('BAD_INPUT');
-    expect((await post(newPerson(s, { pin: '12' }))).json.error).toBe('BAD_INPUT');
+    expect(await post(newPerson(s, { pin: '111111' }))).toMatchObject({ status: 400, json: { error: 'WEAK_SECRET' } });
+    expect((await post(newPerson(s, { pin: '12' }))).json.error).toBe('WEAK_SECRET');
+    expect((await post(newPerson(s, { pin: undefined }))).json.error).toBe('BAD_INPUT');
     expect(await post(newPerson(s, { factoryId: other.factoryId }))).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
     expect(await post(newPerson(s, { fixedPostId: other.postIds[0] }))).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
     expect(await post(newPerson(s, { empNo: '1001' }))).toMatchObject({ status: 400, json: { error: 'DUPLICATE_CODE' } });
@@ -214,11 +215,40 @@ describe('skills · accounts', () => {
     const acc = () => db.select().from(t.accounts).where(eq(t.accounts.personId, pid)).then((r) => r[0]);
     expect((await callRoute(accountsPost, { url: `${U}/accounts`, session: adm, body: { personId: pid, action: 'unlock' } })).status).toBe(200);
     expect(await acc()).toMatchObject({ failedCount: 0, lockedUntil: null });
-    expect((await callRoute(accountsPost, { url: `${U}/accounts`, session: adm, body: { personId: pid, action: 'resetPin', pin: '000000' } })).json.error).toBe('BAD_INPUT');
+    expect((await callRoute(accountsPost, { url: `${U}/accounts`, session: adm, body: { personId: pid, action: 'resetPin', pin: '000000' } })).json.error).toBe('WEAK_SECRET');
     expect((await callRoute(accountsPost, { url: `${U}/accounts`, session: adm, body: { personId: pid, action: 'resetPin', pin: '739105' } })).status).toBe(200);
     const a = await acc();
     expect(a).toMatchObject({ mustChange: true, failedCount: 0, lockedUntil: null });
     expect(await verifySecret('739105', a.secretHash)).toBe(true);
+  });
+
+  test('숙련도 표 GET: 그 공장 재직자 × 사용 자리, 직접 값 표시, 전화 없음', async () => {
+    const { s, adm } = await setup();
+    await db.update(t.persons).set({ phone: '010-9999-0000' }).where(eq(t.persons.id, s.personIds[0]));
+    await db.update(t.persons).set({ active: false }).where(eq(t.persons.id, s.personIds[5]));
+    await db.update(t.posts).set({ active: false }).where(eq(t.posts.id, s.postIds[1]));
+    await db.update(t.persons).set({ fixedPostId: s.postIds[2] }).where(eq(t.persons.id, s.personIds[1]));
+    await callRoute(skillsPost, { url: `${U}/skills`, session: adm, body: { personId: s.personIds[0], postId: s.postIds[0], level: 2 } });
+    const r = await callRoute(skillsGet, { url: `${U}/skills?factoryId=${s.factoryId}`, session: adm });
+    expect(r.status).toBe(200);
+    expect(r.json.persons).toHaveLength(5);
+    expect(r.json.persons[0]).toEqual({ id: s.personIds[0], empNo: '1001', name: '근무자1', crew: 'A' });
+    expect(r.json.posts.map((p: any) => p.code)).toEqual(['L1', 'Q1']);
+    expect(r.json.posts[1]).toEqual({ id: s.postIds[2], code: 'Q1', name: '검사', kind: 'fixed' });
+    expect(r.json.cells).toHaveLength(10);
+    const cell = (personId: string, postId: string) => r.json.cells.find((c: any) => c.personId === personId && c.postId === postId);
+    expect(cell(s.personIds[0], s.postIds[0])).toEqual({ personId: s.personIds[0], postId: s.postIds[0], level: 2, manual: true });
+    expect(cell(s.personIds[1], s.postIds[2])).toEqual({ personId: s.personIds[1], postId: s.postIds[2], level: 3, manual: false }); // 지정 사람
+    expect(cell(s.personIds[2], s.postIds[0])).toMatchObject({ level: 0, manual: false });
+    expect(JSON.stringify(r.json)).not.toContain('010-');
+  });
+
+  test('숙련도 표 GET: 다른 회사 공장·잘못된 id는 400, 근무자는 403', async () => {
+    const { adm, wrk, s, other } = await setup();
+    expect(await callRoute(skillsGet, { url: `${U}/skills?factoryId=${other.factoryId}`, session: adm })).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
+    expect((await callRoute(skillsGet, { url: `${U}/skills?factoryId=nope`, session: adm })).status).toBe(400);
+    expect((await callRoute(skillsGet, { url: `${U}/skills`, session: adm })).status).toBe(400);
+    expect((await callRoute(skillsGet, { url: `${U}/skills?factoryId=${s.factoryId}`, session: wrk })).status).toBe(403);
   });
 
   test('다른 회사 사람·자리 id는 400', async () => {
