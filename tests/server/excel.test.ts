@@ -163,12 +163,64 @@ describe('생산계획', () => {
     expect(done.json.counts).toEqual({ add: 3, update: 1, error: 3 });
     const cells = await db.select().from(t.planCells).where(eq(t.planCells.companyId, s.companyId));
     const get = (d: string, sh: string, post: number) => cells.find((c) => c.date === d && c.shift === sh && c.postId === s.postIds[post]);
-    expect(cells).toHaveLength(4);
+    // 05-01 day had its own cell; 05-02 night, 05-03 day and 05-04 day each materialise all 3 posts first
+    expect(pre.json.inherited).toBe(6);
+    expect(cells).toHaveLength(10);
     expect(get('2025-05-01', 'day', 0)).toMatchObject({ productId: s.productId, status: 'run' });
+    expect(get('2025-05-01', 'day', 1)).toBeUndefined();
     expect(get('2025-05-02', 'night', 1)).toMatchObject({ productId: null, status: 'unmanned' });
+    expect(get('2025-05-02', 'night', 0)).toMatchObject({ productId: null, status: 'run' });
     expect(get('2025-05-03', 'day', 0)).toMatchObject({ productId: s.productId, status: 'run' });
     expect(get('2025-05-04', 'day', 0)).toMatchObject({ productId: null, status: 'off' });
+    expect(get('2025-05-04', 'day', 1)).toMatchObject({ productId: null, status: 'run' });
     expect(get('2025-05-03', 'night', 0)).toBeUndefined();
+  });
+
+  test('일부 라인만 올려도 나머지 라인은 직전 계획을 그대로 이어 쓴다', async () => {
+    const { s, adm } = await setup();
+    // yesterday: L1, Q1 run P1 and L2 off
+    await db.insert(t.planCells).values([
+      { companyId: s.companyId, date: '2025-05-09', shift: 'day', postId: s.postIds[0], productId: s.productId, status: 'run' },
+      { companyId: s.companyId, date: '2025-05-09', shift: 'day', postId: s.postIds[1], productId: null, status: 'off' },
+      { companyId: s.companyId, date: '2025-05-09', shift: 'day', postId: s.postIds[2], productId: s.productId, status: 'run' },
+    ]);
+    const aoa = [PLAN_H, ['2025-05-10', '주간', '1공장', 'L1', '', '쉼']];
+
+    const pre = await upload(adm, aoa, 'preview');
+    expect(pre.json).toMatchObject({ kind: 'plan', counts: { add: 1, update: 0, error: 0 }, inherited: 2 });
+
+    expect((await upload(adm, aoa, 'commit')).json.counts).toEqual({ add: 1, update: 0, error: 0 });
+    const today = await db
+      .select()
+      .from(t.planCells)
+      .where(and(eq(t.planCells.companyId, s.companyId), eq(t.planCells.date, '2025-05-10')));
+    const get = (post: number) => today.find((c) => c.postId === s.postIds[post]);
+    expect(today).toHaveLength(3);
+    expect(get(0)).toMatchObject({ shift: 'day', productId: null, status: 'off' });
+    expect(get(1)).toMatchObject({ shift: 'day', productId: null, status: 'off' });
+    expect(get(2)).toMatchObject({ shift: 'day', productId: s.productId, status: 'run' });
+  });
+
+  test('쉼·무인 행은 그 날짜·교대·라인의 배치를 지운다 (고정 배치 포함)', async () => {
+    const { s, adm } = await setup();
+    const asg = (postIdx: number, personIdx: number, locked: boolean) => ({
+      companyId: s.companyId,
+      date: '2025-05-10',
+      shift: 'day' as const,
+      factoryId: s.factoryId,
+      postId: s.postIds[postIdx],
+      personId: s.personIds[personIdx],
+      source: 'manual' as const,
+      locked,
+    });
+    await db.insert(t.assignments).values([asg(0, 0, true), asg(1, 1, false), asg(1, 2, true)]);
+    const aoa = [PLAN_H, ['2025-05-10', '주간', '1공장', 'L1', '', '쉼'], ['2025-05-10', '주간', '1공장', 'L2', 'P1', '가동']];
+    expect((await upload(adm, aoa, 'commit')).status).toBe(200);
+    const left = await db.select().from(t.assignments).where(eq(t.assignments.companyId, s.companyId));
+    expect(left.map((a) => a.personId).sort()).toEqual([s.personIds[1], s.personIds[2]].sort());
+
+    await upload(adm, [PLAN_H, ['2025-05-10', '주간', '1공장', 'L2', '', '무인']], 'commit');
+    expect(await db.select().from(t.assignments).where(eq(t.assignments.companyId, s.companyId))).toHaveLength(0);
   });
 });
 

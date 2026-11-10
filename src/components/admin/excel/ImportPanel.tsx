@@ -109,6 +109,9 @@ export function ImportPanel() {
               )}
             </span>
           </div>
+          {(preview.inherited ?? 0) > 0 && (
+            <p className="text-sm text-gray-600">나머지 라인은 직전 계획을 그대로 이어 씁니다 ({preview.inherited}칸)</p>
+          )}
           {known && preview.counts.error > 0 && <p className="text-sm text-gray-600">오류 행은 건너뛰고 나머지만 저장해요.</p>}
           {known ? <PreviewTable rows={preview.rows} /> : <SampleTable sample={preview.sample ?? []} />}
         </div>

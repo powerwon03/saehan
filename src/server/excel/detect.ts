@@ -15,6 +15,8 @@ export type ImportPreview = {
   rows: { row: number; action: 'add' | 'update' | 'error'; key: string; errors: string[] }[];
   counts: { add: number; update: number; error: number };
   sample?: string[][];
+  /** Plan only: cells of lines the file does not list that the commit fills from the plan they inherit. */
+  inherited?: number;
 };
 
 export function detectKind(headers: string[]): 'roster' | 'plan' | 'unknown' {

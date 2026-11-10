@@ -7,13 +7,13 @@ export type EffectiveCell = { productId: string | null; status: 'run' | 'off' | 
 const RUN_LINES_FOR_EXTRA_CARRIER = 6;
 const CARRIER_ROLE = '운반';
 
-function activePosts(snap: Snapshot, factoryId: string): Post[] {
+function activePosts(snap: Pick<Snapshot, 'posts'>, factoryId: string): Post[] {
   return snap.posts.filter((p) => p.factoryId === factoryId && p.active);
 }
 
 /** Plan per active post of the factory; falls back to the latest earlier day's cells for the same shift. */
 export function effectivePlan(
-  snap: Snapshot,
+  snap: Pick<Snapshot, 'posts' | 'plans'>,
   factoryId: string,
   date: DateStr,
   shift: Shift,
