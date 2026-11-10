@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { RespondOutcome } from '@/engine/absence';
-import { api, store, workerAction } from '@/components/worker/api';
+import { workerAction } from '@/components/worker/api';
+import { api, store } from '@/lib/api';
 import { BigButton } from '@/components/worker/BigButton';
 import { AlertIcon, CalendarIcon, ChartIcon } from '@/components/worker/Icons';
 import { RequestScreen } from '@/components/worker/RequestScreen';

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { api } from '@/components/worker/api';
+import { api } from '@/lib/api';
 import { PinPad } from '@/components/worker/PinPad';
 import { useWorker } from '@/components/worker/WorkerContext';
 import { errorKey } from '@/i18n';

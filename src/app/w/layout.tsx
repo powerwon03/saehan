@@ -2,7 +2,8 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, store, workerAction } from '@/components/worker/api';
+import { workerAction } from '@/components/worker/api';
+import { api, store } from '@/lib/api';
 import { BigButton } from '@/components/worker/BigButton';
 import { LangMenu } from '@/components/worker/LangMenu';
 import { WorkerContext, type WorkerCtx } from '@/components/worker/WorkerContext';

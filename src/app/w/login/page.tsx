@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { api, loginCompany } from '@/components/worker/api';
+import { api, loginCompany } from '@/lib/api';
 import { BigButton } from '@/components/worker/BigButton';
 import { PinPad } from '@/components/worker/PinPad';
 import { useWorker } from '@/components/worker/WorkerContext';
