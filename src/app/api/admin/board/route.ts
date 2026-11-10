@@ -13,7 +13,7 @@ import { boardView } from '@/server/views/boardView';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const id = z.string().min(1).max(100);
+const id = z.string().uuid();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s));
 const shift = z.enum(['day', 'night']);
 const slot = { date, shift };
@@ -50,6 +50,18 @@ type Action = z.infer<typeof Body>;
 const Query = z.object({ date: date.optional(), shift: shift.optional(), factory: id.optional() });
 
 function dispatch(a: Action, accountId: string): (snap: Snapshot, ctx: Ctx) => Changes {
+  const fn = dispatchUnchecked(a, accountId);
+  return (snap, ctx) => {
+    // ids come from the client: every referenced factory/product must belong to the session company's snapshot
+    if ('factoryId' in a && !snap.factories.some((f) => f.id === a.factoryId)) throw new EngineError('BAD_INPUT', 'unknown factory');
+    if (a.type === 'setPlan' && a.productId !== null && !snap.products.some((p) => p.id === a.productId)) {
+      throw new EngineError('BAD_INPUT', 'unknown product');
+    }
+    return fn(snap, ctx);
+  };
+}
+
+function dispatchUnchecked(a: Action, accountId: string): (snap: Snapshot, ctx: Ctx) => Changes {
   switch (a.type) {
     case 'setPlan':
       return (snap, ctx) => setPlan(snap, a, ctx);
@@ -84,13 +96,16 @@ export const GET = withApi(async (req) => {
   const s = await requireAdmin(req);
   const q = Query.parse(Object.fromEntries(new URL(req.url).searchParams));
   const now = new Date();
+  const today = seoulDate(now);
   const db = await getDb();
   const view = await db.transaction(async (tx) => {
-    let snap = await loadSnapshot(tx, s.companyId, q.date ?? seoulDate(now));
+    // The first load is centred on today only to read settings (needed for currentShift). The snapshot covers a
+    // limited window around its centre date, so when the requested/default date differs we must reload around it.
+    let snap = await loadSnapshot(tx, s.companyId, q.date ?? today);
     const dflt = currentShift(now, snap.settings);
-    const day = q.date ?? dflt.date;
+    const day = q.date ?? (q.shift ? today : dflt.date);
     const sh = q.shift ?? dflt.shift;
-    if (day !== (q.date ?? seoulDate(now))) snap = await loadSnapshot(tx, s.companyId, day);
+    if (day !== (q.date ?? today)) snap = await loadSnapshot(tx, s.companyId, day);
     const factory = q.factory ? snap.factories.find((f) => f.id === q.factory) : snap.factories[0];
     if (!factory) throw new EngineError('BAD_INPUT', 'unknown factory');
     return boardView(snap, { factoryId: factory.id, date: day, shift: sh });

@@ -193,6 +193,52 @@ describe('admin board API', () => {
   });
 });
 
+describe('admin board API: 입력·테넌트 검증', () => {
+  const boardRows = async (factoryId: string) => db.select().from(t.boards).where(eq(t.boards.factoryId, factoryId));
+
+  test('다른 회사 factoryId: autoAssign·confirm → 400, 보드 행 미생성', async () => {
+    const a = await setup();
+    const b = await seedCompany(db);
+    for (const type of ['autoAssign', 'confirm']) {
+      const r = await a.post({ type, factoryId: b.factoryId, date: DAY, shift: 'day' });
+      expect(r.status).toBe(400);
+      expect(r.json).toEqual({ error: 'BAD_INPUT' });
+    }
+    expect(await boardRows(b.factoryId)).toHaveLength(0);
+  });
+
+  test('다른 회사 productId: setPlan → 400', async () => {
+    const a = await setup();
+    const b = await seedCompany(db);
+    const r = await a.post({ ...planBodies(a.s)[0], productId: b.productId });
+    expect(r.status).toBe(400);
+    expect(r.json).toEqual({ error: 'BAD_INPUT' });
+  });
+
+  test('uuid가 아닌 id → 400 BAD_INPUT (POST·GET)', async () => {
+    const a = await setup();
+    const r = await a.post({ type: 'autoAssign', factoryId: 'not-a-uuid', date: DAY, shift: 'day' });
+    expect(r).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
+    expect((await a.post({ type: 'unassign', date: DAY, shift: 'day', assignmentId: '1' })).status).toBe(400);
+    expect((await a.get(`date=${DAY}&shift=day&factory=xyz`)).json).toEqual({ error: 'BAD_INPUT' });
+  });
+
+  test('야간 교대: 다음날 주간 근무자를 야간 배치 → 400 DAY_AFTER_NIGHT', async () => {
+    const { s, post } = await setup();
+    // crew A is off on 2025-04-26 and works day on 04-27
+    const r = await post({ type: 'assign', factoryId: s.factoryId, date: '2025-04-26', shift: 'night', postId: s.postIds[0], personId: s.personIds[0] });
+    expect(r.status).toBe(400);
+    expect(r.json).toEqual({ error: 'DAY_AFTER_NIGHT' });
+  });
+
+  test('GET 기본값: shift만 주면 date는 오늘', async () => {
+    const { get } = await setup();
+    const v = (await get('shift=night')).json;
+    expect(v.shift).toBe('night');
+    expect(v.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
 describe('boardView (pure)', () => {
   test('summary 계산: present = 명단 + 타 교대 sub, vacancies = max(0, need - people)', () => {
     const asg = (id: string, postId: string, personId: string, over: object = {}) => ({
@@ -231,14 +277,30 @@ describe('boardView (pure)', () => {
     expect(v.idle.map((p) => p.personId)).toEqual(['p2']);
   });
 
-  test('초과 배치는 vacancies 0, diff 양수', () => {
+  test('초과 배치는 vacancies 0, 명단 인원과 같은 수', () => {
+    const asg = (id: string, personId: string) => ({
+      id,
+      companyId: 'co-1',
+      date: DAY,
+      shift: 'day' as const,
+      factoryId: 'f1',
+      postId: 'l1',
+      personId,
+      source: 'auto' as const,
+      locked: false,
+      reason: null,
+      flags: [],
+      createdAt: new Date(),
+    });
     const snap = makeSnapshot({
       posts: [makePost({ id: 'l1', defaultNeed: 1 })],
       persons: [makePerson({ id: 'p1', empNo: '1', crew: 'A' }), makePerson({ id: 'p2', empNo: '2', crew: 'A' })],
+      assignments: [asg('a1', 'p1'), asg('a2', 'p2')],
     });
     const v = boardView(snap, { factoryId: 'f1', date: DAY, shift: 'day' });
+    expect(v.lines[0].people).toHaveLength(2);
+    expect(v.lines[0].vacancies).toBe(0);
     expect(v.summary).toEqual({ need: 1, present: 2, diff: 1 });
-    expect(v.lines[0].vacancies).toBe(1);
-    expect(v.idle).toHaveLength(2);
+    expect(v.idle).toHaveLength(0);
   });
 });
