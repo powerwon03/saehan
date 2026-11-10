@@ -3,6 +3,7 @@ import { addDays } from '@/engine/dates';
 import { crewShift } from '@/engine/calendar';
 import { canWorkExtra } from '@/engine/eligibility';
 import { isOff, recentSubCount, shiftsWorked, weekHours } from '@/engine/worklog';
+import { EngineError } from '@/engine/types';
 import type { Absence, Assignment, DateStr, LeaveRequest, Shift, Snapshot } from '@/engine/types';
 import { COMPANY, makePerson, makeSnapshot } from '../helpers/fixtures';
 
@@ -181,5 +182,21 @@ describe('worklog', () => {
     });
     expect(recentSubCount(s, 'pd', d)).toBe(2);
     expect(recentSubCount(s, 'pd', d, 5)).toBe(1);
+  });
+
+  test('공장이 snapshot에 없는 사람은 DATA_INTEGRITY로 실패한다', () => {
+    const s = snap({ persons: [makePerson({ id: 'px', crew: 'A', factoryId: 'missing' })] });
+    expect(() => shiftsWorked(s, 'px', '2026-11-09', '2026-11-15')).toThrow(EngineError);
+    expect(() => shiftsWorked(s, 'px', '2026-11-09', '2026-11-15')).toThrow(
+      expect.objectContaining({ code: 'DATA_INTEGRITY' }),
+    );
+    expect(() => canWorkExtra(s, 'px', '2026-11-10', 'day')).toThrow(
+      expect.objectContaining({ code: 'DATA_INTEGRITY' }),
+    );
+  });
+
+  test('없는 personId는 빈 결과', () => {
+    expect(shiftsWorked(snap(), 'nobody', '2026-11-09', '2026-11-15')).toEqual([]);
+    expect(weekHours(snap(), 'nobody', '2026-11-09')).toBe(0);
   });
 });

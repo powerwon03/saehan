@@ -1,6 +1,6 @@
 import { regularShift } from './calendar';
 import { addDays, diffDays, weekStart } from './dates';
-import type { DateStr, Shift, Snapshot } from './types';
+import { EngineError, type DateStr, type Shift, type Snapshot } from './types';
 
 /** 취소되지 않은 결근 또는 승인된 휴무가 있는 날 */
 export function isOff(snap: Snapshot, personId: string, date: DateStr): boolean {
@@ -28,6 +28,9 @@ export function shiftsWorked(
 
   const person = snap.persons.find((p) => p.id === personId);
   const factory = person ? snap.factories.find((f) => f.id === person.factoryId) : undefined;
+  if (person && !factory) {
+    throw new EngineError('DATA_INTEGRITY', `factory ${person.factoryId} not found for person ${personId}`);
+  }
   if (person && factory) {
     for (let d = from; diffDays(to, d) >= 0; d = addDays(d, 1)) {
       const s = regularShift(person, factory, d);
