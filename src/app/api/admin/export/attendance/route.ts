@@ -4,12 +4,12 @@ import { requireAdmin, withApi } from '@/server/auth/guard';
 import { nowFn } from '@/server/clock';
 import { getDb } from '@/server/db/client';
 import { attendanceAround, buildAttendance, parseMonth } from '@/server/excel/attendance';
+import { XLSX_TYPE } from '@/server/excel/mime';
 import { loadSnapshot } from '@/server/repo/snapshot';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const Query = z.object({ month: z.string() });
 
 export const GET = withApi(async (req) => {

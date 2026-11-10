@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { GET as attendanceGet } from '@/app/api/admin/export/attendance/route';
 import { POST as importPost } from '@/app/api/admin/import/route';
 import { GET as templateGet } from '@/app/api/admin/template/route';
@@ -86,7 +86,7 @@ describe('명단', () => {
     await db.insert(t.assignments).values({ companyId: s.companyId, date: '2025-05-12', shift: 'day', factoryId: s.factoryId, postId: s.postIds[0], personId: s.personIds[1], source: 'manual' });
     const aoa = [
       ROSTER_H,
-      ['2001', '신입', '협력사', 'B', '', '여', '', '1공장', '베트남어', new Date(Date.UTC(2025, 4, 1)), '', 'L2', 3, 0],
+      ['2001', '신입', '협력사', 'B', '', '여', '', '1공장', '베트남어', 45778, '', 'L2', 3, 0],
       ['1001', '개명', '', 'C', '', '', '', 'F1', '', '', '', '', 2, ''],
       ['1002', '근무자2', '', 'A', '', '', '', '1공장', '', '', '2025-05-11', '', '', ''],
     ];
@@ -142,12 +142,12 @@ describe('명단', () => {
 });
 
 describe('생산계획', () => {
-  test('없는 제품 코드 error, 정상 행만 plan_cells upsert (날짜는 Date·일련번호·점 표기 모두)', async () => {
+  test('없는 제품 코드 error, 정상 행만 plan_cells upsert (날짜는 일련번호·점 표기 모두)', async () => {
     const { s, adm } = await setup();
     await db.insert(t.planCells).values({ companyId: s.companyId, date: '2025-05-01', shift: 'day', postId: s.postIds[0], productId: null, status: 'off' });
     const aoa = [
       PLAN_H,
-      [new Date(Date.UTC(2025, 4, 1)), '주간', '1공장', 'L1', 'P1', '가동'], // existing cell → update
+      [45778, '주간', '1공장', 'L1', 'P1', '가동'], // existing cell → update
       [45779, 'night', 'F1', 'L2', '', 'unmanned'], // 2025-05-02
       ['2025.05.03', '야간', '1공장', 'L1', 'NOPE', '가동'], // unknown product
       ['2025-05-03', '주간', '1공장', 'L1', 'P1', '가동'],
@@ -243,6 +243,62 @@ describe('근태표', () => {
     expect(row[3 + 31]).toBe('');
     for (const m of ['2025-5', '2025-13', 'abc']) expect((await callRoute(attendanceGet, { url: `${U}/export/attendance?month=${m}`, session: adm })).status).toBe(400);
     expect((await callRoute(attendanceGet, { url: `${U}/export/attendance`, session: adm })).status).toBe(400);
+  });
+});
+
+describe('경계·격리·롤백', () => {
+  test('데이터 5001행은 400 BAD_INPUT, 5000행은 통과', async () => {
+    const { adm } = await setup();
+    const rows = (n: number) => [PLAN_H, ...Array.from({ length: n }, () => ['2025-05-01', '주간', '1공장', 'L1', 'P1', '가동'])];
+    expect(await upload(adm, rows(5001), 'preview')).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
+    expect((await upload(adm, rows(5000), 'preview')).status).toBe(200);
+  });
+
+  test('xlsx가 아닌 임의 바이트는 500이 아니다(400 또는 unknown), 아무것도 쓰지 않는다', async () => {
+    const { s, adm } = await setup();
+    const junk = new Uint8Array(2048).map((_, i) => (i * 131 + 7) % 256);
+    for (const mode of ['preview', 'commit']) {
+      const r = await callRoute(importPost, { url: `${U}/import`, session: adm, body: form(junk, mode) });
+      expect(r.status, mode).not.toBe(500);
+      expect([200, 400]).toContain(r.status);
+      if (r.status === 200) expect(r.json.kind).toBe('unknown');
+      else expect(['BAD_INPUT', 'UNKNOWN_FORMAT']).toContain(r.json.error);
+    }
+    expect(await db.select().from(t.persons).where(eq(t.persons.companyId, s.companyId))).toHaveLength(6);
+  });
+
+  test('다른 회사에만 있는 사번은 이 회사에서 add, 다른 회사 사람은 그대로', async () => {
+    const { s, adm } = await setup();
+    const other = await seedCompany(db);
+    // company A has no empNo 9001; give B one
+    await db.update(t.persons).set({ empNo: '9001' }).where(eq(t.persons.id, other.personIds[0]));
+    const bRow = (await db.select().from(t.persons).where(eq(t.persons.id, other.personIds[0])))[0];
+    const aoa2 = [ROSTER_H, ['9001', '에이사람', '', 'A', '', '', '', '1공장', '', '', '', '', '', '']];
+    const pre = await upload(adm, aoa2, 'preview');
+    expect(pre.json.counts).toEqual({ add: 1, update: 0, error: 0 });
+    expect((await upload(adm, aoa2, 'commit')).json.counts).toEqual({ add: 1, update: 0, error: 0 });
+    expect((await db.select().from(t.persons).where(eq(t.persons.id, other.personIds[0])))[0]).toEqual(bRow);
+    const a = await db.select().from(t.persons).where(and(eq(t.persons.companyId, s.companyId), eq(t.persons.empNo, '9001')));
+    expect(a).toHaveLength(1);
+    expect(a[0].factoryId).toBe(s.factoryId);
+  });
+
+  test('commit 도중 두 번째 쓰기가 DB 제약으로 실패하면 첫 번째도 롤백', async () => {
+    const { s, adm } = await setup();
+    // a pre-existing account with login id 7002 (no person) makes the 2nd row's account insert violate accounts_company_kind_login_uq
+    await createAccount(db, { companyId: s.companyId, kind: 'worker', loginId: '7002', secret: '482913' });
+    const aoa = [
+      ROSTER_H,
+      ['7001', '첫째', '', 'A', '', '', '', '1공장', '', '', '', '', 3, ''],
+      ['7002', '둘째', '', 'A', '', '', '', '1공장', '', '', '', '', '', ''],
+    ];
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {}); // withApi logs the unhandled error
+    const r = await upload(adm, aoa, 'commit');
+    quiet.mockRestore();
+    expect(r.status).toBe(500);
+    expect(await db.select().from(t.persons).where(and(eq(t.persons.companyId, s.companyId), eq(t.persons.empNo, '7001')))).toHaveLength(0);
+    expect(await db.select().from(t.persons).where(eq(t.persons.companyId, s.companyId))).toHaveLength(6);
+    expect(await db.select().from(t.skills).where(eq(t.skills.companyId, s.companyId))).toHaveLength(0);
   });
 });
 

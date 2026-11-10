@@ -41,11 +41,11 @@ function parsePlan(refs: PlanRefs, rows: SheetRows): Parsed[] {
     const cell = (h: string) => (idx.has(h) ? r[idx.get(h)!] : null);
     const val = (h: string) => text(cell(h));
     const errors: string[] = [];
-    const key = ['날짜', '교대', '공장', '라인'].map(val).join('/');
+    const date = val('날짜') ? parseDate(cell('날짜')) : null;
+    const key = [date ?? val('날짜'), val('교대'), val('공장'), val('라인')].join('/');
     const p: Parsed = { row: i + 1, key, errors, exists: false, cell: null };
     out.push(p);
 
-    const date = val('날짜') ? parseDate(cell('날짜')) : null;
     if (!date) errors.push(val('날짜') ? '날짜가 올바르지 않습니다' : '날짜가 없습니다');
     const shift = SHIFT[val('교대')] ?? SHIFT[val('교대').toLowerCase()];
     if (!shift) errors.push(val('교대') ? `교대 값이 올바르지 않습니다: ${val('교대')}` : '교대가 없습니다');

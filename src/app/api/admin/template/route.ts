@@ -3,13 +3,13 @@ import { seoulDate } from '@/engine/time';
 import { requireAdmin, withApi } from '@/server/auth/guard';
 import { nowFn } from '@/server/clock';
 import { getDb } from '@/server/db/client';
+import { XLSX_TYPE } from '@/server/excel/mime';
 import { loadRefs } from '@/server/excel/refs';
 import { buildTemplate } from '@/server/excel/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const Query = z.object({ type: z.enum(['roster', 'plan']) });
 
 export const GET = withApi(async (req) => {
