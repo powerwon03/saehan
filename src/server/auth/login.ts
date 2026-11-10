@@ -94,7 +94,8 @@ export async function login(db: Executor, input: LoginInput): Promise<LoginResul
   };
 }
 
-function strongEnough(kind: 'admin' | 'worker', next: string): boolean {
+/** Worker PIN: 6 digits, not all-same, not 123456/654321 (admin: 8+ chars). */
+export function strongEnough(kind: 'admin' | 'worker', next: string): boolean {
   if (kind === 'admin') return next.length >= 8;
   if (!/^\d{6}$/.test(next)) return false;
   if (/^(\d)\1{5}$/.test(next)) return false;

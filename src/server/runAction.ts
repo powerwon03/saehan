@@ -33,6 +33,26 @@ export async function runAction<T>(
   return result;
 }
 
+/**
+ * A company-scoped write that bypasses the engine (admin CRUD): lock the company row, run fn, rev + 1.
+ * Any throw rolls the whole transaction back and propagates unchanged.
+ */
+export async function withCompanyTx<T>(
+  companyId: string,
+  fn: (tx: Tx) => Promise<T>,
+  opts: { db?: DB } = {},
+): Promise<T> {
+  assertCompanyId(companyId);
+  const db = opts.db ?? (await getDb());
+  return db.transaction(async (tx) => {
+    const locked = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for('update');
+    if (locked.length === 0) throw new EngineError('BAD_INPUT', `unknown company ${companyId}`);
+    const out = await fn(tx);
+    await tx.update(companies).set({ rev: sql`${companies.rev} + 1` }).where(eq(companies.id, companyId));
+    return out;
+  });
+}
+
 /** Expire overdue sub requests. Bumps rev only when something expired; returns whether it did. */
 export async function expireCompany(companyId: string, opts: RunOpts = {}): Promise<boolean> {
   const now = opts.now ?? new Date();
