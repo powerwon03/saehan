@@ -1,6 +1,6 @@
 import { and, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import type { Changes, TableName } from '@/engine/types';
+import { EngineError, type Changes, type TableName } from '@/engine/types';
 import type { Tx } from '../db/client';
 import * as t from '../db/schema';
 
@@ -23,12 +23,16 @@ const REMOVABLE = {
   leaves: t.leaveRequests,
 } as const;
 
+/** Upserts run parents-first so FKs between rows of one Changes (subRequests → absences) always resolve. */
+const UPSERT_ORDER: readonly TableName[] = ['boards', 'plans', 'absences', 'assignments', 'subRequests', 'leaves'];
+
 /** Keeps each statement well under Postgres' 65535 bind-parameter limit. */
 const CHUNK = 500;
 
 /**
  * Persist engine Changes for one company: all removes, then upserts, then messages.
- * company_id is always forced to `companyId`; rows of other companies are never touched.
+ * company_id is always forced to `companyId`; rows of other companies are never touched: an upsert whose
+ * key already belongs to another company throws DATA_INTEGRITY (rolling back the transaction).
  */
 export async function applyChanges(tx: Tx, companyId: string, changes: Changes, now: Date): Promise<void> {
   for (const [name, ids] of Object.entries(changes.remove) as [TableName, string[]][]) {
@@ -38,12 +42,14 @@ export async function applyChanges(tx: Tx, companyId: string, changes: Changes, 
     await tx.delete(table).where(and(eq(table.companyId, companyId), inArray(table.id, ids)));
   }
 
-  for (const [name, rows] of Object.entries(changes.upsert) as [TableName, object[]][]) {
+  for (const name of UPSERT_ORDER) {
+    const rows = changes.upsert[name];
+    if (!rows || rows.length === 0) continue;
     const { table, key } = TABLES[name];
     const forced: Row[] = rows.map((r) => ({ ...(r as Row), companyId }));
     const unique = [...new Map(forced.map((r) => [key.map((k) => String(r[k])).join('|'), r])).values()];
     for (let i = 0; i < unique.length; i += CHUNK) {
-      await upsert(tx, table, key, unique.slice(i, i + CHUNK));
+      await upsert(tx, companyId, table, key, unique.slice(i, i + CHUNK));
     }
   }
 
@@ -52,15 +58,19 @@ export async function applyChanges(tx: Tx, companyId: string, changes: Changes, 
   }
 }
 
-async function upsert(tx: Tx, table: PgTable, key: readonly string[], rows: Row[]): Promise<void> {
-  if (rows.length === 0) return;
+async function upsert(tx: Tx, companyId: string, table: PgTable, key: readonly string[], rows: Row[]): Promise<void> {
   const cols = getTableColumns(table);
   const set: Record<string, SQL> = {};
   for (const [field, col] of Object.entries(cols)) {
-    if (!key.includes(field)) set[field] = sql`excluded.${sql.identifier(col.name)}`;
+    if (field !== 'companyId' && !key.includes(field)) set[field] = sql`excluded.${sql.identifier(col.name)}`;
   }
-  await tx
+  // A conflicting row of another company fails setWhere, is neither updated nor returned → count mismatch.
+  const written = await tx
     .insert(table)
     .values(rows as PgTable['$inferInsert'][])
-    .onConflictDoUpdate({ target: key.map((k) => cols[k]), set });
+    .onConflictDoUpdate({ target: key.map((k) => cols[k]), set, setWhere: eq(cols.companyId, companyId) })
+    .returning({ one: sql<number>`1` });
+  if (written.length !== rows.length) {
+    throw new EngineError('DATA_INTEGRITY', 'upsert key belongs to another company');
+  }
 }

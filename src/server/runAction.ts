@@ -44,6 +44,7 @@ export async function expireCompany(companyId: string, opts: RunOpts = {}): Prom
 }
 
 export async function getRev(companyId: string, opts: { db?: DB } = {}): Promise<number> {
+  assertCompanyId(companyId);
   const db = opts.db ?? (await getDb());
   const [row] = await db.select({ rev: companies.rev }).from(companies).where(eq(companies.id, companyId));
   if (!row) throw new EngineError('BAD_INPUT', `unknown company ${companyId}`);
@@ -56,7 +57,7 @@ async function inTransaction<T>(
   opts: RunOpts,
   body: (tx: Tx, snap: Snapshot, ctx: Ctx) => Promise<{ bump: boolean; result: T }>,
 ): Promise<{ result: T; expired: boolean }> {
-  if (!UUID.test(companyId)) throw new EngineError('BAD_INPUT', `unknown company ${companyId}`);
+  assertCompanyId(companyId);
   const db = opts.db ?? (await getDb());
   const ctx: Ctx = { now: opts.now ?? new Date(), newId: () => randomUUID() };
   return db.transaction(async (tx) => {
@@ -84,6 +85,11 @@ async function inTransaction<T>(
     }
     return { result, expired };
   });
+}
+
+/** Non-uuid ids would reach Postgres as a raw cast error (22P02); reject them as BAD_INPUT instead. */
+function assertCompanyId(companyId: string): void {
+  if (!UUID.test(companyId)) throw new EngineError('BAD_INPUT', `unknown company ${companyId}`);
 }
 
 function hasChanges(c: Changes): boolean {

@@ -356,6 +356,40 @@ describe('applyChanges / loadSnapshot', () => {
     const msgs = await db.select().from(t.messages).where(eq(t.messages.companyId, a.companyId));
     expect(msgs).toHaveLength(1);
   });
+
+  test('다른 회사 행의 id로 upsert하면 DATA_INTEGRITY, 그 행은 그대로', async () => {
+    const a = await seedCompany(db);
+    const b = await seedCompany(db);
+    const bRow = assignmentOf(b);
+    const cb = emptyChanges();
+    cb.upsert.assignments = [bRow];
+    await db.transaction((tx) => applyChanges(tx, b.companyId, cb, NOW));
+
+    const ca = emptyChanges();
+    ca.upsert.assignments = [assignmentOf(a, { id: bRow.id })];
+    const err = await db
+      .transaction((tx) => applyChanges(tx, a.companyId, ca, NOW))
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(err).toBeInstanceOf(EngineError);
+    expect((err as EngineError).code).toBe('DATA_INTEGRITY');
+    const [row] = await db.select().from(t.assignments).where(eq(t.assignments.id, bRow.id));
+    expect(row).toEqual(bRow);
+  });
+
+  test('upsert는 FK 순서로 적용된다(subRequests가 새 absence보다 먼저 나열돼도)', async () => {
+    const s = await seedCompany(db);
+    const ab = absenceOf(s);
+    const sr = subRequestOf(s, ab.id);
+    const c = emptyChanges();
+    c.upsert = { subRequests: [sr], assignments: [assignmentOf(s, { personId: s.personIds[1] })], absences: [ab] };
+    await db.transaction((tx) => applyChanges(tx, s.companyId, c, NOW));
+    const snap = await db.transaction((tx) => loadSnapshot(tx, s.companyId, AROUND));
+    expect(snap.subRequests).toEqual([sr]);
+    expect(snap.absences).toEqual([ab]);
+  });
 });
 
 describe('runAction', () => {
@@ -414,6 +448,17 @@ describe('runAction', () => {
       (e: unknown) => e,
     );
     expect((err as EngineError).code).toBe('BAD_INPUT');
+  });
+
+  test('getRev는 uuid가 아니거나 없는 회사면 BAD_INPUT', async () => {
+    for (const id of ['not-a-uuid', randomUUID()]) {
+      const err = await getRev(id, { db }).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(EngineError);
+      expect((err as EngineError).code).toBe('BAD_INPUT');
+    }
   });
 
   test('runAction은 fn 전에 만료 요청을 정리한다(만료 sent → expired 상태로 fn에 전달)', async () => {
