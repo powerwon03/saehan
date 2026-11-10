@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ilike, or } from 'drizzle-orm';
+import { and, asc, eq, gte, ilike, notExists, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { seoulDate } from '@/engine/time';
 import { EngineError, type DateStr } from '@/engine/types';
@@ -131,7 +131,7 @@ export async function updatePerson(tx: Tx, companyId: string, personId: string, 
 
 /**
  * Retire: inactive + leftAt; remove placements from max(leftAt, today) on, cancel their open sub requests
- * ('sent') and pending leave requests. Exported for Task 12.
+ * ('sent') and pending leave requests; absences left with no open request fail (round + 1). Exported for Task 12.
  */
 export async function retirePerson(tx: Tx, companyId: string, personId: string, leftAt: DateStr, now: Date): Promise<void> {
   await getPerson(tx, companyId, personId);
@@ -143,6 +143,26 @@ export async function retirePerson(tx: Tx, companyId: string, personId: string, 
     .update(t.subRequests)
     .set({ status: 'cancelled' })
     .where(and(eq(t.subRequests.companyId, companyId), eq(t.subRequests.personId, personId), eq(t.subRequests.status, 'sent')));
+  // an in-progress absence left without any open request would wait forever: fail it (next round), like the engine does
+  const stuck = await tx
+    .update(t.absences)
+    .set({ status: 'failed', round: sql`${t.absences.round} + 1` })
+    .where(
+      and(
+        eq(t.absences.companyId, companyId),
+        eq(t.absences.status, 'in-progress'),
+        notExists(
+          tx
+            .select({ x: t.subRequests.id })
+            .from(t.subRequests)
+            .where(and(eq(t.subRequests.absenceId, t.absences.id), eq(t.subRequests.status, 'sent'))),
+        ),
+      ),
+    )
+    .returning({ id: t.absences.id });
+  if (stuck.length > 0) {
+    await tx.insert(t.messages).values(stuck.map((a) => ({ companyId, personId: null, bodyKey: 'subFailed', params: { absenceId: a.id }, channel: 'admin' as const })));
+  }
   await tx
     .update(t.leaveRequests)
     .set({ status: 'cancelled', decidedAt: now })

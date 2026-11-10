@@ -140,6 +140,43 @@ describe('persons', () => {
     expect((await db.select().from(t.persons).where(eq(t.persons.id, s.personIds[0])))[0]).toMatchObject({ active: true, leftAt: null });
   });
 
+  test('퇴사일이 미래면 그날부터, 과거면 오늘부터 배치를 지운다', async () => {
+    const { s, adm } = await setup();
+    const asg = (personId: string, date: string) =>
+      db.insert(t.assignments).values({ companyId: s.companyId, date, shift: 'day', factoryId: s.factoryId, postId: s.postIds[0], personId, source: 'manual' });
+    const dates = (personId: string) => db.select().from(t.assignments).where(eq(t.assignments.personId, personId)).then((r) => r.map((a) => a.date).sort());
+    const retire = (i: number, date: string) =>
+      callRoute(personAction, { url: `${U}/persons/${s.personIds[i]}`, session: adm, params: { id: s.personIds[i] }, body: { action: 'retire', date } });
+    for (const d of ['2025-04-28', '2025-04-30', '2025-05-02']) await asg(s.personIds[0], d);
+    expect((await retire(0, '2025-04-30')).status).toBe(200);
+    expect(await dates(s.personIds[0])).toEqual(['2025-04-28']);
+    for (const d of ['2025-04-25', '2025-04-27', '2025-04-28']) await asg(s.personIds[1], d);
+    expect((await retire(1, '2025-04-20')).status).toBe(200);
+    expect(await dates(s.personIds[1])).toEqual(['2025-04-25']);
+  });
+
+  test('요청 받은 유일한 사람이 퇴사하면 진행 중 결근은 failed, round + 1, 관리자 메시지', async () => {
+    const { s, adm } = await setup();
+    const mkAbs = async (personId: string, round: number) =>
+      (await db.insert(t.absences).values({ companyId: s.companyId, date: DAY, shift: 'day', factoryId: s.factoryId, personId, kind: 'absent', reportedBy: 'leader', status: 'in-progress', round }).returning())[0];
+    const mkReq = (absenceId: string, personId: string, round: number) =>
+      db.insert(t.subRequests).values({ companyId: s.companyId, absenceId, personId, round, rank: 1, status: 'sent', sentAt: NOW, expiresAt: new Date(NOW.getTime() + 1_200_000) });
+    const only = await mkAbs(s.personIds[1], 1);
+    await mkReq(only.id, s.personIds[0], 1);
+    const shared = await mkAbs(s.personIds[2], 1);
+    await mkReq(shared.id, s.personIds[0], 1);
+    await mkReq(shared.id, s.personIds[3], 1);
+    const r = await callRoute(personAction, { url: `${U}/persons/${s.personIds[0]}`, session: adm, params: { id: s.personIds[0] }, body: { action: 'retire' } });
+    expect(r.status).toBe(200);
+    const [a1] = await db.select().from(t.absences).where(eq(t.absences.id, only.id));
+    expect(a1).toMatchObject({ status: 'failed', round: 2 });
+    const [a2] = await db.select().from(t.absences).where(eq(t.absences.id, shared.id));
+    expect(a2).toMatchObject({ status: 'in-progress', round: 1 });
+    const msgs = await db.select().from(t.messages).where(and(eq(t.messages.companyId, s.companyId), eq(t.messages.bodyKey, 'subFailed')));
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatchObject({ personId: null, channel: 'admin', params: { absenceId: only.id } });
+  });
+
   test('이력 있는 사람 DELETE → 400 HAS_HISTORY, 이력 없으면 계정까지 삭제', async () => {
     const { s, adm } = await setup();
     await db.insert(t.assignments).values({ companyId: s.companyId, date: '2025-04-20', shift: 'day', factoryId: s.factoryId, postId: s.postIds[0], personId: s.personIds[0], source: 'manual' });
