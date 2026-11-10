@@ -29,13 +29,14 @@ type Props = {
 
 /** The one tappable shape on the worker screens: full width, at least 56px tall, icon + short text. */
 export function BigButton({ children, tone = 'gray', size = 'md', icon, href, onClick, disabled, label }: Props) {
-  const cls = `flex w-full items-center justify-center gap-3 rounded-2xl px-4 font-bold select-none ${
+  const cls = `flex w-full items-center justify-center gap-3 rounded-2xl px-4 font-bold select-none [&>svg]:shrink-0 ${
     size === 'lg' ? 'min-h-[80px] text-2xl' : 'min-h-[56px] text-xl'
   } ${TONES[tone]} ${disabled ? 'opacity-50' : ''}`;
   const body = (
     <>
       {icon}
-      <span>{children}</span>
+      {/* break-keep: two short lines at word boundaries in a narrow tile, never a word split mid-way */}
+      <span className="break-keep text-center">{children}</span>
     </>
   );
   if (href && !disabled)

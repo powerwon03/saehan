@@ -17,16 +17,22 @@ export function useRevPoll(onChange: () => void, enabled = true): void {
     let last: number | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
     let alive = true;
+    let inFlight = false;
 
     const poll = async () => {
+      if (inFlight) return; // the previous request is still pending: skip this tick instead of stacking fetches
+      inFlight = true;
       try {
         const res = await fetch('/api/rev', { cache: 'no-store' });
         if (!res.ok || !alive) return;
         const { rev } = (await res.json()) as { rev: number };
+        if (!alive) return;
         if (last !== null && rev !== last) callback.current();
         last = rev;
       } catch {
         /* offline: try again next tick */
+      } finally {
+        inFlight = false;
       }
     };
     const stop = () => {

@@ -17,9 +17,6 @@ const CHIP: Record<string, string> = {
 const STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
 const statusOf = (s: string) => STATUSES.find((x) => x === s) ?? 'pending';
 
-/** Seoul calendar date now, by fixed +09:00 arithmetic (no Intl time zone). */
-const seoulToday = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
-
 /** Next 14 days as big date buttons (one tap = request), then own requests with status and 취소 while pending. */
 export default function LeavePage() {
   const { view, lang, t, reload } = useWorker();
@@ -35,8 +32,8 @@ export default function LeavePage() {
     await reload();
     setBusy(false);
   };
-  const today = seoulToday();
-  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i + 1));
+  // the server's date, not the phone clock (a wrong phone clock must not shift the 14-day window)
+  const days = Array.from({ length: 14 }, (_, i) => addDays(view.today.date, i + 1));
   const active = new Map(view.leaves.filter((l) => l.status === 'pending' || l.status === 'approved').map((l) => [l.date, l.status]));
 
   return (

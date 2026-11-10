@@ -23,6 +23,20 @@ export async function api<T>(path: string, body?: unknown): Promise<ApiResult<T>
 export const workerAction = <T = { ok: true; rev: number }>(action: { type: string } & Record<string, unknown>) =>
   api<T>('/api/worker', action);
 
+const COMPANY_KEY = 'otl_company';
+
+/**
+ * Company code for login: `?company=` when present (and remembered), else the last one remembered, so that
+ * logout / 401 redirects to a bare login URL keep the company. Not a secret. null → server default.
+ */
+export function loginCompany(fromQuery: string | null): string | null {
+  if (fromQuery) {
+    store.set(COMPANY_KEY, fromQuery);
+    return fromQuery;
+  }
+  return store.get(COMPANY_KEY);
+}
+
 /** localStorage that never throws (private mode, disabled storage). */
 export const store = {
   get(key: string): string | null {

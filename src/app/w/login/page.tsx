@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { api } from '@/components/worker/api';
+import { api, loginCompany } from '@/components/worker/api';
 import { BigButton } from '@/components/worker/BigButton';
 import { PinPad } from '@/components/worker/PinPad';
 import { useWorker } from '@/components/worker/WorkerContext';
@@ -14,7 +14,7 @@ type LoginReply = { ok: true; mustChange: boolean };
 function Login() {
   const { t } = useWorker();
   const router = useRouter();
-  const company = useSearchParams().get('company');
+  const query = useSearchParams().get('company');
   const [step, setStep] = useState<'empNo' | 'pin'>('empNo');
   const [empNo, setEmpNo] = useState('');
   const [pin, setPin] = useState('');
@@ -24,6 +24,7 @@ function Login() {
   const submit = async () => {
     setBusy(true);
     setError(null);
+    const company = loginCompany(query);
     const r = await api<LoginReply>('/api/auth/login', { ...(company ? { company } : {}), kind: 'worker', loginId: empNo, secret: pin });
     setBusy(false);
     setPin('');
