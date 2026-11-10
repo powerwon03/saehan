@@ -5,6 +5,7 @@ import { assignPerson, confirmBoard, setPlan, swap, toggleStop, unassign } from 
 import { seoulDate, currentShift } from '@/engine/time';
 import { EngineError, type Changes, type Ctx, type Snapshot } from '@/engine/types';
 import { requireAdmin, withApi } from '@/server/auth/guard';
+import { nowFn } from '@/server/clock';
 import { getDb } from '@/server/db/client';
 import { loadSnapshot } from '@/server/repo/snapshot';
 import { getRev, runAction } from '@/server/runAction';
@@ -95,7 +96,7 @@ function dispatchUnchecked(a: Action, accountId: string): (snap: Snapshot, ctx: 
 export const GET = withApi(async (req) => {
   const s = await requireAdmin(req);
   const q = Query.parse(Object.fromEntries(new URL(req.url).searchParams));
-  const now = new Date();
+  const now = nowFn();
   const today = seoulDate(now);
   const db = await getDb();
   const view = await db.transaction(async (tx) => {
