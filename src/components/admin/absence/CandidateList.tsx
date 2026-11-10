@@ -86,6 +86,7 @@ function CandidateRow({
   onPlace: (c: Candidate, phoned: boolean) => void;
   onRequest: () => void;
 }) {
+  const { view } = useBoard();
   const reasons = c.reasons.map((r) => (r === 'exp' ? '업무 경험' : r === 'product' ? '같은 제품' : c.factoryName));
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
@@ -114,7 +115,7 @@ function CandidateRow({
       {req && (
         <span className={`shrink-0 text-sm font-semibold ${req.status === 'sent' ? 'text-orange-600' : 'text-gray-500'}`}>
           {REQUEST_STATUS[req.status]}
-          {req.status === 'sent' && ` · ${minutesLeft(req.expiresAt, now)}분 남음`}
+          {req.status === 'sent' && ` · ${minutesLeft(req.expiresAt, now, view.requestExpiryMin)}분 남음`}
         </span>
       )}
       {c.kind === 'idle' ? (

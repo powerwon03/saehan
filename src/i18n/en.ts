@@ -75,6 +75,7 @@ export const en: Record<keyof typeof ko, string> = {
   'request.declined': 'OK. Thank you',
   'request.takenByOther': 'Someone else is going',
   'request.expired': 'The request has expired',
+  'request.cancelled': 'The request was cancelled',
 
   'leave.title': 'Day off',
   'leave.pick': 'Tap the day you want off',

@@ -74,6 +74,7 @@ export const ko = {
   'request.declined': '알겠습니다. 고맙습니다',
   'request.takenByOther': '다른 분이 가기로 했습니다',
   'request.expired': '요청 시간이 지났어요',
+  'request.cancelled': '요청이 취소되었습니다',
 
   'leave.title': '휴무 신청',
   'leave.pick': '쉬고 싶은 날을 누르세요',

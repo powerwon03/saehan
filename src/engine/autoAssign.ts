@@ -3,6 +3,7 @@ import { computeSlots, effectivePlan, type Slot } from './demand';
 import { postExperience, productExperience, skillLevel, skillRate } from './skill';
 import {
   emptyChanges,
+  type Absence,
   type Assignment,
   type Board,
   type Changes,
@@ -18,6 +19,7 @@ const EXPERIENCE_WEIGHT = 0.2;
 const HOURS_FREE = 40;
 const HOURS_PENALTY = 0.5;
 const SINGLE_CAPABLE_LEVEL = 2;
+const AWAITING_SUB: Absence['status'][] = ['decided', 'in-progress', 'failed'];
 
 export type ScoreCtx = {
   factoryId: string;
@@ -114,6 +116,12 @@ export function autoAssign(snap: Snapshot, factoryId: string, date: DateStr, shi
   for (const a of locked) {
     const list = slotsByPost.get(a.postId);
     if (list) list.pop();
+  }
+  // An absence still waiting for its replacement keeps one slot of its post free (re-running must not over-staff it).
+  for (const ab of snap.absences) {
+    if (ab.factoryId !== factoryId || ab.date !== date || ab.shift !== shift || ab.postId === null) continue;
+    if (!AWAITING_SUB.includes(ab.status)) continue;
+    slotsByPost.get(ab.postId)?.pop();
   }
 
   const rows: Assignment[] = [];

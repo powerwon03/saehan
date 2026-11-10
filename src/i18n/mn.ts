@@ -76,6 +76,7 @@ export const mn: Record<keyof typeof ko, string> = {
   'request.declined': 'Ойлголоо. Баярлалаа',
   'request.takenByOther': 'Өөр хүн явахаар болсон',
   'request.expired': 'Хүсэлтийн хугацаа дууссан',
+  'request.cancelled': 'Хүсэлт цуцлагдсан',
 
   'leave.title': 'Амралт хүсэх',
   'leave.pick': 'Амрах өдрөө дарна уу',

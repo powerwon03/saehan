@@ -35,6 +35,8 @@ export type BoardView = {
     candidates: (Candidate & { name: string; empNo: string; factoryName: string })[];
   }[];
   products: { id: string; code: string; name: string }[];
+  /** Company request expiry (settings): the 「N분 남음」 countdown never shows more. */
+  requestExpiryMin: number;
 };
 
 /** Pure admin board view model. Reasons/warnings/flags stay as codes; the screen maps them through the dictionary. */
@@ -128,5 +130,6 @@ export function boardView(
     idle: idlePeople(snap, factoryId, date, shift).map(personRef),
     absences,
     products: snap.products.filter((p) => p.active).map((p) => ({ id: p.id, code: p.code, name: p.name })),
+    requestExpiryMin: snap.settings.requestExpiryMin,
   };
 }

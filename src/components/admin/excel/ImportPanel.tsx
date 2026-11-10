@@ -3,12 +3,17 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { send } from '@/lib/api';
+import { MAX_UPLOAD_BYTES } from '@/lib/upload';
 import type { ImportPreview } from '@/server/excel/detect';
 import { btn, btnPrimary, card } from '../common/styles';
 import { errorText } from '../labels';
 import { PreviewTable, SampleTable } from './PreviewTable';
 
 type Committed = { kind: 'roster' | 'plan'; counts: ImportPreview['counts'] };
+
+/** Local error marker for a file over the limit (checked before uploading). */
+const TOO_LARGE = 'TOO_LARGE';
+const LIMIT_MB = MAX_UPLOAD_BYTES / 1024 / 1024;
 
 const KIND: Record<ImportPreview['kind'], string> = { roster: '명단', plan: '생산계획', unknown: '알 수 없는 양식' };
 
@@ -41,6 +46,7 @@ export function ImportPanel() {
     setPreview(null);
     setFile(f);
     if (!f) return;
+    if (f.size > MAX_UPLOAD_BYTES) return setError(TOO_LARGE);
     setBusy(true);
     const r = await upload<ImportPreview>(f, 'preview');
     setBusy(false);
@@ -77,12 +83,13 @@ export function ImportPanel() {
           aria-label="엑셀 파일"
           className="text-[15px] file:mr-3 file:h-10 file:rounded-lg file:border file:border-gray-300 file:bg-white file:px-4 file:font-semibold"
         />
+        <span className="text-sm text-gray-500">엑셀 파일, {LIMIT_MB}MB까지</span>
         {busy && <span className="text-gray-500">처리 중…</span>}
       </div>
 
       {error && (
         <p role="alert" className="font-semibold text-red-600">
-          {errorText(error)}
+          {error === TOO_LARGE ? `파일이 ${LIMIT_MB}MB보다 커요. 나눠서 올려 주세요.` : errorText(error)}
         </p>
       )}
 

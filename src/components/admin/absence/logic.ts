@@ -26,10 +26,7 @@ export function bulkTargets(candidates: Cand[], requests: Req[], n = SHOWN): str
     .map((c) => c.personId);
 }
 
-/** Whole minutes until `expiresAt` (rounded up), 0 once passed. */
-export function minutesLeft(expiresAt: Date | string, now: number): number {
-  return Math.max(0, Math.ceil((ms(expiresAt) - now) / 60_000));
-}
+export { minutesLeft } from '@/lib/countdown';
 
 /** Minutes from report to resolution, at least 1. */
 export function resolvedMinutes(createdAt: Date | string, resolvedAt: Date | string): number {

@@ -76,6 +76,7 @@ export const vi: Record<keyof typeof ko, string> = {
   'request.declined': 'Đã hiểu. Cảm ơn bạn',
   'request.takenByOther': 'Người khác đã nhận đi rồi',
   'request.expired': 'Yêu cầu đã hết hạn',
+  'request.cancelled': 'Yêu cầu đã bị hủy',
 
   'leave.title': 'Xin nghỉ',
   'leave.pick': 'Bấm vào ngày muốn nghỉ',

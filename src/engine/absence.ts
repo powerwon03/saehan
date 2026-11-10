@@ -19,7 +19,8 @@ import {
   type TableName,
 } from './types';
 
-export type RespondOutcome = 'accepted' | 'declined' | 'takenByOther' | 'expired';
+/** `cancelled`: the absence itself was withdrawn (nobody else took it). */
+export type RespondOutcome = 'accepted' | 'declined' | 'takenByOther' | 'expired' | 'cancelled';
 
 const PLACEABLE: Absence['status'][] = ['decided', 'in-progress', 'failed'];
 
@@ -242,7 +243,10 @@ export function respondSub(
   const request = snap.subRequests.find((r) => r.id === input.requestId);
   if (!request) throw new EngineError('BAD_INPUT', `request ${input.requestId} not found`);
   if (request.personId !== input.personId) throw new EngineError('FORBIDDEN');
-  if (request.status !== 'sent') return { changes: emptyChanges(), outcome: OUTCOME_BY_STATUS[request.status] };
+  if (request.status !== 'sent') {
+    const withdrawn = request.status === 'cancelled' && snap.absences.find((a) => a.id === request.absenceId)?.status === 'cancelled';
+    return { changes: emptyChanges(), outcome: withdrawn ? 'cancelled' : OUTCOME_BY_STATUS[request.status] };
+  }
 
   const absence = findAbsence(snap, request.absenceId);
   const closed = new Set([request.id]);
@@ -252,7 +256,8 @@ export function respondSub(
     return { changes, outcome: 'expired' };
   }
   if (absence.status === 'resolved' || absence.status === 'cancelled') {
-    return { changes: upsertOf('subRequests', { ...request, status: 'cancelled' }), outcome: 'takenByOther' };
+    const outcome = absence.status === 'cancelled' ? 'cancelled' : 'takenByOther';
+    return { changes: upsertOf('subRequests', { ...request, status: 'cancelled' }), outcome };
   }
   if (!input.accept) {
     const declined = upsertOf('subRequests', { ...request, status: 'declined', respondedAt: ctx.now });

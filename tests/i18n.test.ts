@@ -46,6 +46,7 @@ describe('dictionaries', () => {
     expect(ko['request.accept']).toBe('갈 수 있어요');
     expect(ko['request.decline']).toBe('못 가요');
     expect(ko['request.takenByOther']).toBe('다른 분이 가기로 했습니다');
+    expect(ko['request.cancelled']).toBe('요청이 취소되었습니다');
   });
 
   test('메시지 bodyKey 전부에 msg.<key>가 있다', () => {

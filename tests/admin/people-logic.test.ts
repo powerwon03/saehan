@@ -39,27 +39,19 @@ describe('person form ↔ payload', () => {
     expect(createPayload({ ...f, empNo: ' 1002 ' }).empNo).toBe('1002');
   });
 
-  test('수정: 사람 → 폼 → PATCH는 PIN 없이 같은 값', () => {
+  test('수정: 바꾼 칸만 PATCH로 보낸다 (안 바꾼 언어는 절대 보내지 않음)', () => {
     const f = formFromPerson(person);
     expect(f.pin).toBe('');
-    expect(patchPayload(f)).toEqual({
-      empNo: '1001',
-      name: '홍길동',
-      affiliation: 'partner',
-      crew: 'B',
-      role: '포장',
-      gender: 'F',
-      phone: '010-1234-5678',
-      factoryId: 'f1',
-      lang: 'vi',
-      fixedPostId: 'post1',
-      hiredAt: '2025-03-02',
-    });
+    expect(patchPayload(f, person)).toEqual({});
+    expect(patchPayload({ ...f, name: ' 홍길순 ', crew: 'C' }, person)).toEqual({ name: '홍길순', crew: 'C' });
+    expect(patchPayload({ ...f, lang: 'en' }, person)).toEqual({ lang: 'en' });
+    expect(patchPayload({ ...f, empNo: ' 1009 ' }, person)).toEqual({ empNo: '1009' });
+    expect(patchPayload({ ...f, factoryId: 'f2', fixedPostId: '' }, person)).toEqual({ factoryId: 'f2', fixedPostId: null });
   });
 
   test('수정에서 지운 칸은 null로 보냄', () => {
     const f = { ...formFromPerson(person), role: ' ', gender: '' as const, phone: '', fixedPostId: '', hiredAt: '' };
-    expect(patchPayload(f)).toMatchObject({ role: null, gender: null, phone: null, fixedPostId: null, hiredAt: null });
+    expect(patchPayload(f, person)).toEqual({ role: null, gender: null, phone: null, fixedPostId: null, hiredAt: null });
   });
 });
 

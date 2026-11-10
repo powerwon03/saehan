@@ -64,7 +64,7 @@ export function PersonForm({
     setError(null);
     const r = creating
       ? await send<{ person: PersonRow }>('POST', '/api/admin/persons', createPayload(form))
-      : await send<{ person: PersonRow }>('PATCH', `/api/admin/persons/${person.id}`, patchPayload(form));
+      : await send<{ person: PersonRow }>('PATCH', `/api/admin/persons/${person.id}`, patchPayload(form, person));
     setBusy(false);
     if (!r.ok && r.status === 401) return router.replace('/login');
     if (!r.ok) return setError({ code: r.code, pin: r.code === 'WEAK_SECRET' });

@@ -24,7 +24,7 @@ const NOTE: Partial<Record<Absence['status'], string>> = {
 
 /** One absence: who · which post · reported time · kind · status, request progress, candidates, 「신고 취소」. */
 export function AbsenceCard({ absence, now, focused }: { absence: Absence; now: number; focused: boolean }) {
-  const { run, busy } = useBoard();
+  const { run, busy, view } = useBoard();
   const ref = useRef<HTMLElement>(null);
   const cancelKey = `cancel:${absence.id}`;
   const resolved = absence.status === 'resolved';
@@ -66,7 +66,7 @@ export function AbsenceCard({ absence, now, focused }: { absence: Absence; now: 
             {absence.requests.map((r) => (
               <li key={r.id} className={`rounded-lg px-3 py-1 text-sm ${r.status === 'sent' ? 'bg-orange-50 text-orange-800' : 'bg-gray-100 text-gray-600'}`}>
                 <b>{r.name}</b> {REQUEST_STATUS[r.status]}
-                {r.status === 'sent' && ` · ${minutesLeft(r.expiresAt, now)}분 남음`}
+                {r.status === 'sent' && ` · ${minutesLeft(r.expiresAt, now, view.requestExpiryMin)}분 남음`}
               </li>
             ))}
           </ul>

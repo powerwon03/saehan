@@ -40,13 +40,16 @@ describe('bulkTargets', () => {
 describe('time helpers', () => {
   const at = (iso: string) => new Date(iso);
 
-  test('minutesLeft: 올림, 지나면 0', () => {
-    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-10T00:05:30Z'))).toBe(15);
-    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-10T00:21:00Z'))).toBe(0);
+  test('minutesLeft: 내림, 지나면 0, 설정한 기한(분)보다 크게 보이지 않는다', () => {
+    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-10T00:05:30Z'), 20)).toBe(14);
+    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-10T00:21:00Z'), 20)).toBe(0);
+    // just sent (or a clock running behind): never more than the configured expiry
+    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-10T00:00:00Z'), 20)).toBe(20);
+    expect(minutesLeft(at('2026-11-10T00:20:00Z'), Date.parse('2026-11-09T23:50:00Z'), 20)).toBe(20);
   });
 
   test('JSON 문자열 날짜도 받는다', () => {
-    expect(minutesLeft('2026-11-10T00:20:00.000Z' as unknown as Date, Date.parse('2026-11-10T00:10:00Z'))).toBe(10);
+    expect(minutesLeft('2026-11-10T00:20:00.000Z' as unknown as Date, Date.parse('2026-11-10T00:10:00Z'), 20)).toBe(10);
   });
 
   test('resolvedMinutes: 반올림, 최소 1분', () => {

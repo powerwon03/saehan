@@ -380,6 +380,27 @@ describe('guards & routes', () => {
     expect(out.setCookie).toMatch(/^otl_session=;.*Max-Age=0/);
   });
 
+  test('회사 코드가 없을 때: 운영에서 DEFAULT_COMPANY도 없으면 400, 개발에서는 demo로 시도', async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const saved = { NODE_ENV: env.NODE_ENV, DEFAULT_COMPANY: env.DEFAULT_COMPANY };
+    const body = { kind: 'worker', loginId: '1001', secret: '482917' };
+    try {
+      delete env.DEFAULT_COMPANY;
+      env.NODE_ENV = 'production';
+      expect(await callRoute(loginRoute, { body })).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
+      env.NODE_ENV = 'development';
+      expect(await callRoute(loginRoute, { body })).toMatchObject({ status: 401, json: { error: 'INVALID' } }); // no 'demo' company here
+      const { code } = await workerSetup();
+      env.NODE_ENV = 'production';
+      env.DEFAULT_COMPANY = code;
+      expect(await callRoute(loginRoute, { body })).toMatchObject({ status: 200, json: { ok: true } });
+    } finally {
+      env.NODE_ENV = saved.NODE_ENV;
+      env.DEFAULT_COMPANY = saved.DEFAULT_COMPANY;
+      if (saved.DEFAULT_COMPANY === undefined) delete env.DEFAULT_COMPANY;
+    }
+  });
+
   test('잠금 라우트 → 423 + lockedUntil', async () => {
     const { code } = await workerSetup();
     let r;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EngineError } from '@/engine/types';
 import { withApi } from '@/server/auth/guard';
 import { login } from '@/server/auth/login';
 import { sessionCookie } from '@/server/auth/session';
@@ -15,10 +16,18 @@ const Body = z.object({
   secret: z.string().min(1).max(200),
 });
 
+/** Company code: the body's, else DEFAULT_COMPANY; the 'demo' fallback is for development only. */
+function companyCode(given: string | undefined): string {
+  const code = given ?? process.env.DEFAULT_COMPANY;
+  if (code) return code;
+  if (process.env.NODE_ENV === 'production') throw new EngineError('BAD_INPUT', 'company is required');
+  return 'demo';
+}
+
 export const POST = withApi(async (req) => {
   const body = Body.parse(await req.json().catch(() => null));
   const r = await login(await getDb(), {
-    companyCode: body.company ?? process.env.DEFAULT_COMPANY ?? 'demo',
+    companyCode: companyCode(body.company),
     kind: body.kind,
     loginId: body.loginId,
     secret: body.secret,

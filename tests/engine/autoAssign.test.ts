@@ -64,6 +64,31 @@ describe('rosterFor', () => {
 });
 
 describe('autoAssign', () => {
+  test('대체를 기다리는 결근(decided·in-progress·failed, 자리 있음)은 그 자리 한 칸을 비워 둔다', () => {
+    const pending = (personId: string, status: Absence['status'], postId: string | null = 'L1'): Absence =>
+      ({ ...absence(personId), id: `ab-${personId}`, status, postId }) as Absence;
+    const base = {
+      posts: [line('L1', 0, { defaultNeed: 3 }), line('L2', 1, { defaultNeed: 1 })],
+      persons: ['p1', 'p2', 'p3', 'p4', 'p5', 'x1', 'x2', 'x3', 'x4'].map((id) => day(id)),
+    };
+    const count = (c: Changes, postId: string) => added(c).filter((a) => a.postId === postId).length;
+
+    // L1 needs 3; x1 (decided) and x2 (in-progress) wait for replacements on L1, x3 failed on L2
+    const waiting = makeSnapshot({ ...base, absences: [pending('x1', 'decided'), pending('x2', 'in-progress'), pending('x3', 'failed', 'L2')] });
+    const c = autoAssign(waiting, 'f1', D, 'day', ctx());
+    expect(count(c, 'L1')).toBe(1);
+    expect(count(c, 'L2')).toBe(0);
+
+    // resolved / not-needed / cancelled / no post: nothing reserved
+    const done = makeSnapshot({
+      ...base,
+      absences: [pending('x1', 'resolved'), pending('x2', 'not-needed'), pending('x3', 'cancelled'), pending('x4', 'decided', null)],
+    });
+    const d = autoAssign(done, 'f1', D, 'day', ctx());
+    expect(count(d, 'L1')).toBe(3);
+    expect(count(d, 'L2')).toBe(1);
+  });
+
   test('결과 배치에 같은 사람이 두 번 나오지 않는다', () => {
     const snap = makeSnapshot({
       posts: [line('L1', 0, { defaultNeed: 3 }), line('L2', 1, { defaultNeed: 3 })],

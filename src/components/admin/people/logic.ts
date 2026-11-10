@@ -67,9 +67,19 @@ export function createPayload(f: PersonForm) {
   return { ...(empNo ? { empNo } : {}), ...common(f), pin: f.pin };
 }
 
-/** PATCH /api/admin/persons/[id] body (no PIN: that is reset from the row menu). */
-export function patchPayload(f: PersonForm) {
-  return { empNo: f.empNo.trim(), ...common(f) };
+type Patch = Partial<{ empNo: string } & ReturnType<typeof common>>;
+
+/**
+ * PATCH /api/admin/persons/[id] body: only the fields that differ from `person` (no PIN: that is reset from the row
+ * menu). An unchanged field is never sent, so an edit cannot overwrite e.g. a language the worker just picked.
+ */
+export function patchPayload(f: PersonForm, person: PersonRow): Patch {
+  const next = { empNo: f.empNo.trim(), ...common(f) };
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(next)) {
+    if (v !== (person[k as keyof PersonRow] ?? null)) out[k] = v;
+  }
+  return out as Patch;
 }
 
 /** Locked = lockedUntil still in the future. */

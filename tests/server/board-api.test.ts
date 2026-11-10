@@ -55,6 +55,7 @@ describe('admin board API', () => {
 
     const v = (await get()).json;
     expect(v.status).toBe('draft');
+    expect(v.requestExpiryMin).toBe(20);
     const placed = v.lines.flatMap((l: any) => l.people.map((p: any) => p.personId));
     expect(new Set(placed).size).toBe(placed.length);
     const vacancies = v.lines.reduce((n: number, l: any) => n + l.vacancies, 0);

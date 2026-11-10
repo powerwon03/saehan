@@ -21,7 +21,8 @@ export type WorkerView = {
   tomorrow: ShiftCard;
   canReportAbsence: boolean;
   myAbsence: { id: string; status: Absence['status']; reportedBy: Absence['reportedBy'] } | null;
-  request: { id: string; date: DateStr; shift: Shift; factoryName: string; postName: string; expiresAt: string } | null;
+  /** expiryMin: the company's request expiry, the most the countdown may show. */
+  request: { id: string; date: DateStr; shift: Shift; factoryName: string; postName: string; expiresAt: string; expiryMin: number } | null;
   requestOutcome: 'takenByOther' | null;
   leaves: { id: string; date: DateStr; status: string }[];
   month: MonthlyRecord;
@@ -90,6 +91,7 @@ export function workerView(snap: Snapshot, personId: string, now: Date): WorkerV
           factoryName: factoryName(openAbsence.factoryId),
           postName: (openAbsence.postId && postName(openAbsence.postId)) || '',
           expiresAt: open.expiresAt.toISOString(),
+          expiryMin: snap.settings.requestExpiryMin,
         }
       : null;
 

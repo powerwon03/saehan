@@ -323,9 +323,14 @@ describe('respondSub', () => {
     expect(upserts<SubRequest>(c, 'subRequests')).toEqual([expect.objectContaining({ id: 'rq1', status: 'cancelled' })]);
   });
 
-  test('absence가 cancelled여도 takenByOther', () => {
+  test('결근 신고가 취소됐으면 outcome cancelled (다른 사람이 간 것이 아님)', () => {
     const snap = sentSnap({ absences: [absence({ status: 'cancelled' })] });
-    expect(respondSub(snap, { requestId: 'rq1', personId: 'r1', accept: true }, ctxAt('2026-04-21T00:05:00Z')).outcome).toBe('takenByOther');
+    const { changes: c, outcome } = respondSub(snap, { requestId: 'rq1', personId: 'r1', accept: true }, ctxAt('2026-04-21T00:05:00Z'));
+    expect(outcome).toBe('cancelled');
+    expect(upserts<SubRequest>(c, 'subRequests')).toEqual([expect.objectContaining({ id: 'rq1', status: 'cancelled' })]);
+    // already cancelled by cancelAbsence: same answer
+    const after = sentSnap({ absences: [absence({ status: 'cancelled' })], subRequests: [req({ status: 'cancelled' })] });
+    expect(respondSub(after, { requestId: 'rq1', personId: 'r1', accept: true }, ctxAt('2026-04-21T00:05:00Z')).outcome).toBe('cancelled');
   });
 
   test('이미 처리된 요청은 빈 Changes + 상태별 outcome', () => {

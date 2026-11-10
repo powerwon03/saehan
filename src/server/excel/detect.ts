@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 import { EngineError, type DateStr } from '@/engine/types';
+import { MAX_UPLOAD_BYTES } from '@/lib/upload';
 
-export const MAX_BYTES = 5 * 1024 * 1024;
+export const MAX_BYTES = MAX_UPLOAD_BYTES;
 export const MAX_DATA_ROWS = 5000;
 
 export const ROSTER_REQUIRED = ['사번', '이름', '조', '공장'] as const;

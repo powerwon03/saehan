@@ -9,7 +9,7 @@ import type { Session } from '@/server/auth/session';
 import { setNowForTests } from '@/server/clock';
 import { setDbForTests, type DB } from '@/server/db/client';
 import * as t from '@/server/db/schema';
-import { detectKind } from '@/server/excel/detect';
+import { MAX_BYTES, detectKind } from '@/server/excel/detect';
 import { callRoute } from '../helpers/http';
 import { createTestDb, seedCompany } from '../helpers/testDb';
 
@@ -237,9 +237,10 @@ describe('형식 검사', () => {
     expect(await db.select().from(t.persons).where(eq(t.persons.companyId, s.companyId))).toHaveLength(6);
   });
 
-  test('5MB 초과 업로드와 파일 없음은 400', async () => {
+  test('4MB 초과 업로드(Vercel 본문 한도 4.5MB 아래)와 파일 없음은 400', async () => {
+    expect(MAX_BYTES).toBe(4 * 1024 * 1024);
     const { adm } = await setup();
-    const big = new Uint8Array(5 * 1024 * 1024 + 1);
+    const big = new Uint8Array(4 * 1024 * 1024 + 1);
     expect(await callRoute(importPost, { url: `${U}/import`, session: adm, body: form(big, 'preview') })).toMatchObject({ status: 400, json: { error: 'BAD_INPUT' } });
     const none = new FormData();
     none.set('mode', 'preview');

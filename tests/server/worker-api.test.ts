@@ -90,7 +90,8 @@ describe('GET /api/worker', () => {
     }
     const b = (await get(4)).json;
     expect(b.request).toMatchObject({ date: DAY, shift: 'day', factoryName: '1공장', postName: expect.any(String) });
-    expect(Object.keys(b.request).sort()).toEqual(['date', 'expiresAt', 'factoryName', 'id', 'postName', 'shift']);
+    expect(Object.keys(b.request).sort()).toEqual(['date', 'expiresAt', 'expiryMin', 'factoryName', 'id', 'postName', 'shift']);
+    expect(b.request.expiryMin).toBe(20);
   });
 
   test('02:00 KST 야간 근무자: today.date는 전날, shift night, canReportAbsence false', async () => {

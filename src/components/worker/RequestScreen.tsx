@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RespondOutcome } from '@/engine/absence';
 import { formatDate, type DictKey } from '@/i18n';
+import { minutesLeft } from '@/lib/countdown';
 import type { WorkerView } from '@/server/views/workerView';
 import { BigButton } from './BigButton';
 import { MoonIcon, SunIcon } from './Icons';
@@ -29,22 +30,22 @@ const OUTCOME_TEXT: Record<RespondOutcome, DictKey> = {
   declined: 'request.declined',
   takenByOther: 'request.takenByOther',
   expired: 'request.expired',
+  cancelled: 'request.cancelled',
 };
 
 const TICK_MS = 5_000;
 
-/** Milliseconds until `expiresAt`, re-read every few seconds; calls `onExpired` once when it reaches 0. */
-function useMsLeft(expiresAt: string, onExpired: () => void): number {
-  const calc = () => Date.parse(expiresAt) - Date.now();
-  const [left, setLeft] = useState(calc);
+/** Clock re-read every few seconds; calls `onExpired` once when `expiresAt` is reached. */
+function useExpiryClock(expiresAt: string, onExpired: () => void): number {
+  const [now, setNow] = useState(() => Date.now());
   const expiredRef = useRef(onExpired);
   expiredRef.current = onExpired;
   useEffect(() => {
     let fired = false;
     const tick = () => {
-      const ms = calc();
-      setLeft(ms);
-      if (ms <= 0 && !fired) {
+      const t = Date.now();
+      setNow(t);
+      if (t >= Date.parse(expiresAt) && !fired) {
         fired = true;
         expiredRef.current();
       }
@@ -52,17 +53,17 @@ function useMsLeft(expiresAt: string, onExpired: () => void): number {
     tick();
     const id = setInterval(tick, TICK_MS);
     return () => clearInterval(id);
-  }, [expiresAt]); // calc only reads expiresAt
-  return left;
+  }, [expiresAt]);
+  return now;
 }
 
 /** Full-screen sub request (replaces home): question, slot details, minutes left, two big answers. */
 export function RequestScreen({ request, time, outcome, busy, error, onRespond, onDone, onExpired }: Props) {
   const { lang, t } = useWorker();
-  const msLeft = useMsLeft(request.expiresAt, onExpired);
-  const left = Math.ceil(msLeft / 60_000);
+  const now = useExpiryClock(request.expiresAt, onExpired);
+  const left = minutesLeft(request.expiresAt, now, request.expiryMin);
   const night = request.shift === 'night';
-  const shown: RespondOutcome | null = outcome ?? (msLeft <= 0 ? 'expired' : null);
+  const shown: RespondOutcome | null = outcome ?? (now >= Date.parse(request.expiresAt) ? 'expired' : null);
   const Icon = night ? MoonIcon : SunIcon;
 
   return (
