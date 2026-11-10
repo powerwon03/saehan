@@ -10,7 +10,10 @@ export function suggestEmpNo(existing: string[]): string {
     if (!best || n > best.n) best = { prefix: m[1], digits: m[2], n };
   }
   if (!best) return '0001';
-  return best.prefix + (best.n + 1n).toString().padStart(best.digits.length, '0');
+  // BigInt(1), not `1n`: next build's file tracer (@vercel/nft) takes `best` for its initial null and would
+  // compute `undefined + 1n` itself, throwing "Cannot mix BigInt" and failing the build (tests/build/trace.test.ts).
+  const next = best.n + BigInt(1);
+  return best.prefix + next.toString().padStart(best.digits.length, '0');
 }
 
 /** Worker PIN: 6 digits, not all-same, not 123456/654321 (admin: 8+ chars). */
