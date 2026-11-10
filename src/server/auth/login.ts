@@ -1,4 +1,5 @@
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { strongEnough } from '@/lib/personRules';
 import type { Executor } from '@/server/db/client';
 import { accounts, companies, persons } from '@/server/db/schema';
 import { hashSecret, verifySecret } from './hash';
@@ -94,13 +95,7 @@ export async function login(db: Executor, input: LoginInput): Promise<LoginResul
   };
 }
 
-/** Worker PIN: 6 digits, not all-same, not 123456/654321 (admin: 8+ chars). */
-export function strongEnough(kind: 'admin' | 'worker', next: string): boolean {
-  if (kind === 'admin') return next.length >= 8;
-  if (!/^\d{6}$/.test(next)) return false;
-  if (/^(\d)\1{5}$/.test(next)) return false;
-  return next !== '123456' && next !== '654321';
-}
+export { strongEnough };
 
 export async function changeSecret(
   db: Executor,

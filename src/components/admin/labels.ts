@@ -1,5 +1,5 @@
 import type { Candidate } from '@/engine/recommend';
-import type { AbsenceKind } from '@/engine/types';
+import type { AbsenceKind, Factory, Person, Post, ShiftOrOff } from '@/engine/types';
 import { errorKey, t } from '@/i18n';
 import type { BoardView } from '@/server/views/boardView';
 
@@ -54,3 +54,19 @@ export const WARNING: Record<Candidate['warnings'][number], string> = {
 };
 
 export const CANDIDATE_KIND: Record<Candidate['kind'], string> = { idle: '대기', rest: '휴무' };
+
+// Master data / people labels (values are the server's enum values).
+
+export const AFFILIATION: Record<Person['affiliation'], string> = { direct: '직영', partner: '협력사', temp: '임시' };
+
+export const LANG_NAME: Record<Person['lang'], string> = { ko: '한국어', en: 'English', mn: 'Монгол', vi: 'Tiếng Việt' };
+
+export const GENDER: Record<'M' | 'F', string> = { M: '남', F: '여' };
+
+export const CREWS = ['A', 'B', 'C', 'D'] as const satisfies readonly Person['crew'][];
+
+export const POST_KIND: Record<Post['kind'], string> = { line: '라인', fixed: '고정' };
+
+export const APPROVAL: Record<Factory['approval'], string> = { confirm: '반장 확정', 'draft-decide': '반장 입안 → 팀장 결정' };
+
+export const SHIFT_OR_OFF: Record<ShiftOrOff, string> = { day: '주간', night: '야간', off: '휴무' };

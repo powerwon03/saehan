@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { seoulDate } from '@/engine/time';
 import { EngineError, type DateStr } from '@/engine/types';
 import { createAccount } from '@/server/auth/accounts';
-import { strongEnough } from '@/server/auth/login';
+import { strongEnough, suggestEmpNo } from '@/lib/personRules';
 import { hashSecret } from '@/server/auth/hash';
 import type { Executor as Tx } from '@/server/db/client';
 import * as t from '@/server/db/schema';
@@ -11,18 +11,7 @@ import { dateStr, id } from './common';
 
 type PersonRow = typeof t.persons.$inferSelect;
 
-/** Next employee number: the numerically largest trailing number + 1, same prefix and zero-padded width. */
-export function suggestEmpNo(existing: string[]): string {
-  let best: { prefix: string; digits: string; n: bigint } | null = null;
-  for (const e of existing) {
-    const m = /^(.*?)(\d+)$/.exec(e);
-    if (!m) continue;
-    const n = BigInt(m[2]);
-    if (!best || n > best.n) best = { prefix: m[1], digits: m[2], n };
-  }
-  if (!best) return '0001';
-  return best.prefix + (best.n + 1n).toString().padStart(best.digits.length, '0');
-}
+export { suggestEmpNo } from '@/lib/personRules';
 
 const pin = z.string().refine((p) => strongEnough('worker', p));
 const text = z.string().trim().min(1).max(100);

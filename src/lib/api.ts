@@ -2,13 +2,22 @@ export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; code: string; body: Record<string, unknown> };
 
-/** JSON fetch for the worker and admin screens. A network failure becomes code 'NETWORK' (status 0). */
-export async function api<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
+/** JSON fetch for the worker and admin screens: GET without a body, POST with one. */
+export function api<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
+  return send<T>(body === undefined ? 'GET' : 'POST', path, body);
+}
+
+/**
+ * Any method; `body` is sent as JSON, or as multipart when it is FormData (file upload).
+ * A network failure becomes code 'NETWORK' (status 0); a non-JSON error reply becomes 'INTERNAL'.
+ */
+export async function send<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<ApiResult<T>> {
+  const form = body instanceof FormData;
   try {
     const res = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST',
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      method,
+      headers: body === undefined || form ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
       cache: 'no-store',
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
