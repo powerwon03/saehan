@@ -21,7 +21,7 @@ export type Seeded = {
  * One company (unique random code) with a default settings row, factory F1 '1공장' (cycle_base_date 2025-04-27,
  * approval confirm), posts L1/L2 (line, default_need 1) + Q1 (fixed, role 'qc'), product P1, and six persons.
  */
-export async function seedCompany(db: DB, over: { code?: string; name?: string } = {}): Promise<Seeded> {
+export async function seedCompany(db: DB, over: { code?: string; name?: string; crews?: ('A' | 'B' | 'C' | 'D')[] } = {}): Promise<Seeded> {
   const [company] = await db
     .insert(t.companies)
     .values({ code: over.code ?? `co-${randomUUID().slice(0, 8)}`, name: over.name ?? '테스트 회사' })
@@ -49,7 +49,7 @@ export async function seedCompany(db: DB, over: { code?: string; name?: string }
     .values({ companyId, code: 'P1', name: '제품1' })
     .returning({ id: t.products.id });
 
-  const crews = ['A', 'A', 'B', 'B', 'C', 'C'] as const;
+  const crews = over.crews ?? (['A', 'A', 'B', 'B', 'C', 'C'] as const);
   const persons = await db
     .insert(t.persons)
     .values(crews.map((crew, i) => ({ companyId, empNo: `${1001 + i}`, name: `근무자${i + 1}`, crew, factoryId })))
