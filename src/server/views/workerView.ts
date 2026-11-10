@@ -18,7 +18,7 @@ export type WorkerView = {
   today: ShiftCard;
   tomorrow: ShiftCard;
   canReportAbsence: boolean;
-  myAbsence: { id: string; status: Absence['status'] } | null;
+  myAbsence: { id: string; status: Absence['status']; reportedBy: Absence['reportedBy'] } | null;
   request: { id: string; date: DateStr; shift: Shift; factoryName: string; postName: string; expiresAt: string } | null;
   requestOutcome: 'takenByOther' | null;
   leaves: { id: string; date: DateStr; status: string }[];
@@ -108,7 +108,7 @@ export function workerView(snap: Snapshot, personId: string, now: Date): WorkerV
     today,
     tomorrow,
     canReportAbsence,
-    myAbsence: absence ? { id: absence.id, status: absence.status } : null,
+    myAbsence: absence ? { id: absence.id, status: absence.status, reportedBy: absence.reportedBy } : null,
     request,
     requestOutcome,
     leaves: snap.leaves

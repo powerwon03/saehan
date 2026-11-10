@@ -41,7 +41,7 @@ function dispatch(a: Exclude<Action, { type: 'setLang' }>, personId: string): (s
       return (snap, ctx) => {
         const absence = snap.absences.find((x) => x.id === a.absenceId);
         if (!absence) throw new EngineError('BAD_INPUT', 'unknown absence');
-        if (absence.personId !== personId) throw new EngineError('FORBIDDEN');
+        if (absence.personId !== personId || absence.reportedBy !== 'self') throw new EngineError('FORBIDDEN');
         return cancelAbsence(snap, { absenceId: a.absenceId, by: 'self' }, ctx);
       };
     case 'respond':
@@ -55,8 +55,6 @@ function dispatch(a: Exclude<Action, { type: 'setLang' }>, personId: string): (s
       return (snap, ctx) => cancelLeave(snap, { leaveId: a.leaveId, personId }, ctx);
   }
 }
-
-const forbidden = () => Response.json({ error: 'FORBIDDEN' }, { status: 403 });
 
 export const GET = withApi(async (req) => {
   const s = await requireWorker(req);
@@ -73,21 +71,16 @@ export const POST = withApi(async (req) => {
   const personId = s.personId!;
   const now = nowFn();
 
-  try {
-    if (body.type === 'setLang') {
-      const db = await getDb();
-      await db.transaction(async (tx) => {
-        await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, s.companyId)).for('update');
-        await tx.update(persons).set({ lang: body.lang }).where(and(eq(persons.id, personId), eq(persons.companyId, s.companyId)));
-        await tx.update(companies).set({ rev: sql`${companies.rev} + 1` }).where(eq(companies.id, s.companyId));
-      });
-      return Response.json({ ok: true, rev: await getRev(s.companyId) });
-    }
-    const result = await runAction(s.companyId, seoulDate(now), dispatch(body, personId), { now });
-    const rev = await getRev(s.companyId);
-    return Response.json(body.type === 'respond' ? { ok: true, outcome: result, rev } : { ok: true, rev });
-  } catch (e) {
-    if (e instanceof EngineError && e.code === 'FORBIDDEN') return forbidden();
-    throw e;
+  if (body.type === 'setLang') {
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, s.companyId)).for('update');
+      await tx.update(persons).set({ lang: body.lang }).where(and(eq(persons.id, personId), eq(persons.companyId, s.companyId)));
+      await tx.update(companies).set({ rev: sql`${companies.rev} + 1` }).where(eq(companies.id, s.companyId));
+    });
+    return Response.json({ ok: true, rev: await getRev(s.companyId) });
   }
+  const result = await runAction(s.companyId, seoulDate(now), dispatch(body, personId), { now });
+  const rev = await getRev(s.companyId);
+  return Response.json(body.type === 'respond' ? { ok: true, outcome: result, rev } : { ok: true, rev });
 });

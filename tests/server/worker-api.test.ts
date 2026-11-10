@@ -230,6 +230,16 @@ describe('POST /api/worker', () => {
     expect(await post(1, { type: 'reportAbsence' })).toMatchObject({ status: 400, json: { error: 'CANNOT_REPORT' } });
   });
 
+  test('관리자가 신고한 결근은 근무자가 취소할 수 없다 → 403', async () => {
+    const { s, post, planAndAssign, adminSession } = await setup();
+    await planAndAssign();
+    const r = await callRoute(boardPost, { url: URL_B, session: adminSession, body: { type: 'reportAbsence', date: DAY, shift: 'day', personId: s.personIds[0], kind: 'absent' } });
+    expect(r.status).toBe(200);
+    const [row] = await db.select().from(t.absences).where(eq(t.absences.companyId, s.companyId));
+    expect(row.reportedBy).not.toBe('self');
+    expect(await post(0, { type: 'cancelAbsence', absenceId: row.id })).toMatchObject({ status: 403, json: { error: 'FORBIDDEN' } });
+  });
+
   test('setLang은 본인 언어만 바꾸고 rev가 오른다; 잘못된 본문은 400', async () => {
     const { s, post, get } = await setup();
     const rev = async () => (await db.select().from(t.companies).where(eq(t.companies.id, s.companyId)))[0].rev;

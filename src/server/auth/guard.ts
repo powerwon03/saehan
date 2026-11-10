@@ -51,7 +51,7 @@ export function withApi<A extends unknown[]>(
       return await handler(req, ...rest);
     } catch (e) {
       if (e instanceof Response) return e;
-      if (e instanceof EngineError) return reply(400, e.code);
+      if (e instanceof EngineError) return reply(e.code === 'FORBIDDEN' ? 403 : 400, e.code);
       if (e instanceof ZodError) return reply(400, 'BAD_INPUT');
       console.error('[api] unhandled error:', e instanceof Error ? e.name : typeof e);
       return reply(500, 'INTERNAL');

@@ -117,6 +117,6 @@ export const GET = withApi(async (req) => {
 export const POST = withApi(async (req) => {
   const s = await requireAdmin(req);
   const body = Body.parse(await req.json().catch(() => null));
-  await runAction(s.companyId, body.date, dispatch(body, s.accountId));
+  await runAction(s.companyId, body.date, dispatch(body, s.accountId), { now: nowFn() });
   return Response.json({ ok: true, rev: await getRev(s.companyId) });
 });
