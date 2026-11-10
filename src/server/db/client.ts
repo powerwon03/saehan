@@ -14,6 +14,13 @@ const MIGRATIONS = path.resolve(process.cwd(), 'drizzle');
 const LOCAL_DIR = './.data/pglite';
 
 type Opened = { db: DB; close: () => Promise<void>; migrate: () => Promise<void> };
+let testDb: DB | null = null;
+
+/** Tests: make getDb() return this handle (null restores normal behaviour). */
+export function setDbForTests(db: DB | null): void {
+  testDb = db;
+}
+
 const g = globalThis as typeof globalThis & { __onetouchDb?: Promise<Opened> };
 
 /**
@@ -21,6 +28,7 @@ const g = globalThis as typeof globalThis & { __onetouchDb?: Promise<Opened> };
  * Otherwise PGlite at `./.data/pglite`, migrated on first call. Cached on globalThis (Next dev hot reload).
  */
 export async function getDb(): Promise<DB> {
+  if (testDb) return testDb;
   return (await opened()).db;
 }
 
