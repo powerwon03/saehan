@@ -11,7 +11,7 @@ export type Tx = Parameters<Parameters<DB['transaction']>[0]>[0];
 export type Executor = DB | Tx;
 
 const MIGRATIONS = path.resolve(process.cwd(), 'drizzle');
-const LOCAL_DIR = './.data/pglite';
+const DEFAULT_LOCAL_DIR = './.data/pglite';
 
 type Opened = { db: DB; close: () => Promise<void>; migrate: () => Promise<void> };
 let testDb: DB | null = null;
@@ -25,7 +25,7 @@ const g = globalThis as typeof globalThis & { __onetouchDb?: Promise<Opened> };
 
 /**
  * `DATABASE_URL` set → postgres-js (`prepare: false`, Supabase pooler compatible).
- * Otherwise PGlite at `./.data/pglite`, migrated on first call. Cached on globalThis (Next dev hot reload).
+ * Otherwise PGlite at `$PGLITE_DIR` (default `./.data/pglite`), migrated on first call. Cached on globalThis (Next dev hot reload).
  */
 export async function getDb(): Promise<DB> {
   if (testDb) return testDb;
@@ -64,8 +64,9 @@ async function open(): Promise<Opened> {
     const db = drizzle(client, { schema });
     return { db, close: () => client.end(), migrate: () => migrate(db, { migrationsFolder: MIGRATIONS }) };
   }
-  mkdirSync(LOCAL_DIR, { recursive: true });
-  const { db, close } = await openPglite(LOCAL_DIR);
+  const localDir = process.env.PGLITE_DIR || DEFAULT_LOCAL_DIR;
+  mkdirSync(localDir, { recursive: true });
+  const { db, close } = await openPglite(localDir);
   return { db, close, migrate: async () => {} };
 }
 
