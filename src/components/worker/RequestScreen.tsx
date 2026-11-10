@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RespondOutcome } from '@/engine/absence';
 import { formatDate, type DictKey } from '@/i18n';
 import type { WorkerView } from '@/server/views/workerView';
@@ -20,6 +20,8 @@ type Props = {
   error: string | null;
   onRespond: (accept: boolean) => void;
   onDone: () => void;
+  /** The local countdown reached 0: the page reloads its view so a stale request cannot keep this screen up. */
+  onExpired: () => void;
 };
 
 const OUTCOME_TEXT: Record<RespondOutcome, DictKey> = {
@@ -29,23 +31,38 @@ const OUTCOME_TEXT: Record<RespondOutcome, DictKey> = {
   expired: 'request.expired',
 };
 
-function useMinutesLeft(expiresAt: string): number {
-  const calc = () => Math.ceil((Date.parse(expiresAt) - Date.now()) / 60_000);
+const TICK_MS = 5_000;
+
+/** Milliseconds until `expiresAt`, re-read every few seconds; calls `onExpired` once when it reaches 0. */
+function useMsLeft(expiresAt: string, onExpired: () => void): number {
+  const calc = () => Date.parse(expiresAt) - Date.now();
   const [left, setLeft] = useState(calc);
+  const expiredRef = useRef(onExpired);
+  expiredRef.current = onExpired;
   useEffect(() => {
-    setLeft(calc());
-    const id = setInterval(() => setLeft(calc()), 30_000);
+    let fired = false;
+    const tick = () => {
+      const ms = calc();
+      setLeft(ms);
+      if (ms <= 0 && !fired) {
+        fired = true;
+        expiredRef.current();
+      }
+    };
+    tick();
+    const id = setInterval(tick, TICK_MS);
     return () => clearInterval(id);
   }, [expiresAt]); // calc only reads expiresAt
   return left;
 }
 
 /** Full-screen sub request (replaces home): question, slot details, minutes left, two big answers. */
-export function RequestScreen({ request, time, outcome, busy, error, onRespond, onDone }: Props) {
+export function RequestScreen({ request, time, outcome, busy, error, onRespond, onDone, onExpired }: Props) {
   const { lang, t } = useWorker();
-  const left = useMinutesLeft(request.expiresAt);
+  const msLeft = useMsLeft(request.expiresAt, onExpired);
+  const left = Math.ceil(msLeft / 60_000);
   const night = request.shift === 'night';
-  const shown: RespondOutcome | null = outcome ?? (left <= 0 ? 'expired' : null);
+  const shown: RespondOutcome | null = outcome ?? (msLeft <= 0 ? 'expired' : null);
   const Icon = night ? MoonIcon : SunIcon;
 
   return (

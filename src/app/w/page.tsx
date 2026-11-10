@@ -67,6 +67,12 @@ export default function HomePage() {
         onDone={() => {
           setAnswered(null);
           setError(null);
+          void reload();
+        }}
+        onExpired={() => {
+          // keep 「expired」 on screen until 확인, while the reload drops the stale request from the view
+          if (!answered) setAnswered({ request: shownRequest, outcome: 'expired' });
+          void reload();
         }}
       />
     );

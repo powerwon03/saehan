@@ -1,0 +1,1 @@
+CREATE INDEX "sub_requests_company_status_expires_idx" ON "sub_requests" USING btree ("company_id","status","expires_at");

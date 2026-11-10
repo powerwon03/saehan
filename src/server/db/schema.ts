@@ -301,7 +301,10 @@ export const subRequests = pgTable(
     expiresAt: ts('expires_at').notNull(),
     respondedAt: ts('responded_at'),
   },
-  (t) => [index('sub_requests_absence_idx').on(t.absenceId)],
+  (t) => [
+    index('sub_requests_absence_idx').on(t.absenceId),
+    index('sub_requests_company_status_expires_idx').on(t.companyId, t.status, t.expiresAt),
+  ],
 );
 
 export const leaveRequests = pgTable(

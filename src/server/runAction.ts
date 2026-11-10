@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { expireRequests } from '@/engine/absence';
 import { seoulDate } from '@/engine/time';
 import { EngineError, type Changes, type Ctx, type DateStr, type Snapshot } from '@/engine/types';
 import { getDb, type DB, type Tx } from './db/client';
-import { companies } from './db/schema';
+import { companies, subRequests } from './db/schema';
 import { applyChanges } from './repo/apply';
 import { loadSnapshot } from './repo/snapshot';
 
@@ -61,6 +61,18 @@ export async function expireCompany(companyId: string, opts: RunOpts = {}): Prom
     result: undefined,
   }));
   return expired;
+}
+
+/** Cheap indexed check (sub_requests_company_status_expires_idx): does the company have a `sent` request past its expiry? */
+export async function hasOverdueRequests(companyId: string, now: Date, opts: { db?: DB } = {}): Promise<boolean> {
+  assertCompanyId(companyId);
+  const db = opts.db ?? (await getDb());
+  const rows = await db
+    .select({ id: subRequests.id })
+    .from(subRequests)
+    .where(and(eq(subRequests.companyId, companyId), eq(subRequests.status, 'sent'), lte(subRequests.expiresAt, now)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 export async function getRev(companyId: string, opts: { db?: DB } = {}): Promise<number> {

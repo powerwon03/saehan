@@ -19,7 +19,7 @@ function authorized(req: Request, secret: string): boolean {
 
 /**
  * Scheduled expiry (Vercel Cron or Supabase pg_cron + pg_net): expire overdue sub requests of every company.
- * Requests are also expired inside every write, so this only keeps screens current when nobody acts.
+ * Requests are also expired inside every write and on every /api/rev poll, so this only matters when no screen is open.
  * CRON_SECRET unset → 503 CRON_DISABLED; wrong or missing bearer → 401. Returns how many companies changed.
  */
 export const GET = withApi(async (req) => {
