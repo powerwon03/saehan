@@ -61,15 +61,26 @@ export function withApi<A extends unknown[]>(
 
 type Coded = { name?: unknown; message?: unknown; code?: unknown; cause?: unknown };
 
-/** Server-log summary of an unexpected error (name, message, code, cause code/message); never sent to the client. */
+/**
+ * Server-log summary of an unexpected error (name, message, code, cause code/message); never sent to the client.
+ * drizzle's DrizzleQueryError puts the bound params in its message ("Failed query: …\nparams: …"), and those can be
+ * password hashes, names or phone numbers — so the params part is always cut and never logged.
+ */
 function describeError(e: unknown): Record<string, unknown> {
   if (!(e instanceof Error)) return { type: typeof e };
   const { code, cause } = e as Coded;
   const c = (typeof cause === 'object' && cause !== null ? cause : {}) as Coded;
+  const causeMessage = typeof c.message === 'string' ? c.message : cause === undefined ? undefined : String(cause);
   return {
     name: e.name,
-    message: e.message,
+    message: withoutParams(e.message),
     code,
-    cause: cause === undefined ? undefined : { code: c.code, message: c.message ?? String(cause) },
+    cause: cause === undefined ? undefined : { code: c.code, message: causeMessage && withoutParams(causeMessage) },
   };
+}
+
+/** Keep the SQL text, drop everything from the "params:" line on. */
+function withoutParams(message: string): string {
+  const i = message.search(/\n?\s*params:/);
+  return i === -1 ? message : `${message.slice(0, i)} [params omitted]`;
 }

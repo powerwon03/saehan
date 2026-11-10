@@ -4,7 +4,7 @@ import { expireRequests } from '@/engine/absence';
 import { seoulDate } from '@/engine/time';
 import { EngineError, type Changes, type Ctx, type DateStr, type Snapshot } from '@/engine/types';
 import { getDb, type DB, type Tx } from './db/client';
-import { companies, subRequests } from './db/schema';
+import { absences, companies, subRequests } from './db/schema';
 import { applyChanges } from './repo/apply';
 import { loadSnapshot } from './repo/snapshot';
 
@@ -53,14 +53,37 @@ export async function withCompanyTx<T>(
   });
 }
 
-/** Expire overdue sub requests. Bumps rev only when something expired; returns whether it did. */
+/**
+ * Expire overdue sub requests. Bumps rev only when something expired; returns whether it did.
+ * The snapshot only covers today−35…today+15, so a request for an absence outside that window would never
+ * expire (and `hasOverdueRequests` would keep sending every poll here). Load the snapshot around each
+ * overdue absence's own date instead — usually one date.
+ */
 export async function expireCompany(companyId: string, opts: RunOpts = {}): Promise<boolean> {
+  assertCompanyId(companyId);
   const now = opts.now ?? new Date();
-  const { expired } = await inTransaction(companyId, seoulDate(now), { ...opts, now }, async () => ({
-    bump: false,
-    result: undefined,
-  }));
-  return expired;
+  const db = opts.db ?? (await getDb());
+  const dates = await overdueAbsenceDates(db, companyId, now);
+  let any = false;
+  for (const around of dates.length > 0 ? dates : [seoulDate(now)]) {
+    const { expired } = await inTransaction(companyId, around, { ...opts, db, now }, async () => ({
+      bump: false,
+      result: undefined,
+    }));
+    any ||= expired;
+  }
+  return any;
+}
+
+/** Distinct absence dates of the company's overdue `sent` requests, oldest first. */
+async function overdueAbsenceDates(db: DB, companyId: string, now: Date): Promise<DateStr[]> {
+  const rows = await db
+    .selectDistinct({ date: absences.date })
+    .from(subRequests)
+    .innerJoin(absences, and(eq(absences.id, subRequests.absenceId), eq(absences.companyId, companyId)))
+    .where(and(eq(subRequests.companyId, companyId), eq(subRequests.status, 'sent'), lte(subRequests.expiresAt, now)))
+    .orderBy(absences.date);
+  return rows.map((r) => r.date);
 }
 
 /** Cheap indexed check (sub_requests_company_status_expires_idx): does the company have a `sent` request past its expiry? */

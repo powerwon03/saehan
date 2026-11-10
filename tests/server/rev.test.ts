@@ -7,7 +7,7 @@ import type { Session } from '@/server/auth/session';
 import { setNowForTests } from '@/server/clock';
 import { setDbForTests, type DB } from '@/server/db/client';
 import * as t from '@/server/db/schema';
-import { getRev } from '@/server/runAction';
+import { getRev, hasOverdueRequests } from '@/server/runAction';
 import { callRoute } from '../helpers/http';
 import { createTestDb, seedCompany, type Seeded } from '../helpers/testDb';
 
@@ -24,12 +24,12 @@ afterAll(() => setDbForTests(null));
 afterEach(() => setNowForTests(null));
 
 /** An in-progress absence with one `sent` sub request expiring at 09:50 Seoul. */
-async function sentRequest(s: Seeded): Promise<{ requestId: string; absenceId: string }> {
+async function sentRequest(s: Seeded, date = '2026-11-10'): Promise<{ requestId: string; absenceId: string }> {
   const absenceId = randomUUID();
   await db.insert(t.absences).values({
     id: absenceId,
     companyId: s.companyId,
-    date: '2026-11-10',
+    date,
     shift: 'day',
     factoryId: s.factoryId,
     personId: s.personIds[0],
@@ -89,5 +89,16 @@ describe('GET /api/rev', () => {
     expect(r.json).toEqual({ rev: 0 });
     expect(await statusOf(t.subRequests, requestId)).toBe('sent');
     expect(await getRev(s.companyId, { db })).toBe(0);
+  });
+  test('스냅샷 창 밖(30일 뒤) 결근의 기한 지난 요청도 만료하고, 다음 폴링은 잠금 없이 끝난다', async () => {
+    const s = await seedCompany(db);
+    const { requestId, absenceId } = await sentRequest(s, '2026-12-10');
+    setNowForTests(new Date(EXPIRES.getTime() + 1000));
+
+    const sess = await session(s);
+    expect((await callRoute(revGet, { url: URL, session: sess })).json).toEqual({ rev: 1 });
+    expect(await statusOf(t.subRequests, requestId)).toBe('expired');
+    expect(await statusOf(t.absences, absenceId)).toBe('failed');
+    expect(await hasOverdueRequests(s.companyId, new Date(EXPIRES.getTime() + 1000), { db })).toBe(false);
   });
 });

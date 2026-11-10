@@ -2,7 +2,10 @@
 
 구현 중 계획·명세가 정하지 않았거나 서로 어긋난 부분에서 내린 결정(Ruling), 남겨 둔 문제, 미뤄 둔 작은 항목입니다. 각 줄의 "cost if wrong"은 결정이 틀렸을 때의 영향입니다.
 
-## 배포 전에 처리 권장 (최종 리뷰에서 남은 항목)
+## 최종 리뷰에서 남은 항목 — 2026-11-10 해결됨
+
+- 해결: N1은 expireCompany가 기한 지난 요청의 결근 날짜마다 그 날짜 기준으로 스냅샷을 불러 만료합니다(창 밖 요청도 만료, 이후 폴링은 잠금 없음). N2는 서버 오류 로그에서 SQL 파라미터(params:) 부분을 항상 잘라 냅니다. 테스트: tests/server/rev.test.ts, tests/server/guard-log.test.ts.
+
 
 - N1 (Important): /api/rev EXISTS sees overdue sent requests outside the snapshot window (absence >15 days ahead) → every poll takes the company lock + loads a snapshot without expiring — Ruling: real; no second fix wave per process; surfaced to user as a pre-production follow-up (fix: scope EXISTS to the snapshot window or expire overdue rows by direct SQL) — cost if wrong: lock contention only when an admin requests subs >15 days ahead.
 - N2 (Important): withApi logs DrizzleQueryError.message which includes SQL bind params (could include secret_hash, names, phones) — Ruling: real; surfaced to user as a pre-production follow-up (fix: log SQL text + cause.code/message, never params) — cost if wrong: sensitive values in server logs on DB failures.
