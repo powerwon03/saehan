@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { withApi } from '@/server/auth/guard';
 import { login } from '@/server/auth/login';
 import { sessionCookie } from '@/server/auth/session';
+import { nowFn } from '@/server/clock';
 import { getDb } from '@/server/db/client';
 
 export const runtime = 'nodejs';
@@ -21,6 +22,7 @@ export const POST = withApi(async (req) => {
     kind: body.kind,
     loginId: body.loginId,
     secret: body.secret,
+    now: nowFn(),
   });
   if (r.ok)
     return Response.json(

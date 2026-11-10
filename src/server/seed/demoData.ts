@@ -148,6 +148,7 @@ async function wipeCompany(tx: Executor, companyId: string): Promise<void> {
     t.experienceBase,
     t.skills,
     t.accounts,
+    t.loginFailures,
     t.standards,
     t.persons,
     t.products,

@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
 import { EngineError } from '@/engine/types';
 import { POST as loginRoute } from '@/app/api/auth/login/route';
 import { POST as logoutRoute } from '@/app/api/auth/logout/route';
@@ -11,6 +11,7 @@ import { requireAdmin, requireWorker, withApi } from '@/server/auth/guard';
 import { hashSecret, verifySecret } from '@/server/auth/hash';
 import { changeSecret, login } from '@/server/auth/login';
 import { readSession, signSession, type Session } from '@/server/auth/session';
+import { setNowForTests } from '@/server/clock';
 import { setDbForTests, type DB } from '@/server/db/client';
 import * as t from '@/server/db/schema';
 import { callRoute } from '../helpers/http';
@@ -22,6 +23,7 @@ beforeAll(async () => {
   setDbForTests(db);
 });
 afterAll(() => setDbForTests(null));
+afterEach(() => setNowForTests(null));
 
 const NOW = new Date('2026-11-10T00:00:00Z');
 const min = (n: number) => new Date(NOW.getTime() + n * 60_000);
@@ -167,6 +169,38 @@ describe('login', () => {
     expect(ok).toMatchObject({ ok: true, mustChange: false });
     const wrongKind = await login(db, { companyCode: co.code, kind: 'worker', loginId: 'boss', secret: 'longpassword', now: NOW });
     expect(wrongKind).toMatchObject({ ok: false, code: 'INVALID' });
+  });
+});
+
+describe('회사 단위 근무자 로그인 실패 창 (PIN 뿌리기 방어)', () => {
+  test('사번 20개로 20번 실패 → 첫 PIN 계정은 정답도 LOCKED, 활성 근무자·관리자는 그대로, 10분 뒤 다시 된다', async () => {
+    const { code, s } = await workerSetup(true, '482917');
+    await createAccount(db, { companyId: s.companyId, kind: 'worker', loginId: '1002', secret: '739104', personId: s.personIds[1] });
+    await createAccount(db, { companyId: s.companyId, kind: 'admin', loginId: 'boss', secret: 'longpassword' });
+    for (let i = 0; i < 20; i++) expect(await wl(code, '000111', NOW, `${9000 + i}`)).toEqual({ ok: false, code: 'INVALID' });
+
+    expect(await wl(code, '482917', min(1))).toEqual({ ok: false, code: 'LOCKED', lockedUntil: min(10) });
+    expect(await wl(code, '000111', min(1), '9100')).toMatchObject({ ok: false, code: 'LOCKED' });
+    expect((await accountOf(s.companyId)).failedCount).toBe(0); // the account itself was never tried
+    expect(await wl(code, '739104', min(1), '1002')).toMatchObject({ ok: true, mustChange: false });
+    const admin = await login(db, { companyCode: code, kind: 'admin', loginId: 'boss', secret: 'longpassword', now: min(1) });
+    expect(admin.ok).toBe(true);
+
+    // the login route reads the clock through nowFn
+    const route = () => callRoute(loginRoute, { body: { company: code, kind: 'worker', loginId: '1001', secret: '482917' } });
+    setNowForTests(min(9));
+    expect(await route()).toMatchObject({ status: 423, json: { error: 'LOCKED' } });
+    setNowForTests(min(10));
+    expect(await route()).toMatchObject({ status: 200, json: { ok: true, mustChange: true } });
+  });
+
+  test('19번 실패까지는 첫 PIN 계정도 정상 로그인, 다른 회사의 실패는 세지 않는다', async () => {
+    const a = await workerSetup(true, '482917');
+    const b = await workerSetup(true, '482917');
+    for (let i = 0; i < 19; i++) await wl(a.code, '000111', NOW, `${9000 + i}`);
+    for (let i = 0; i < 20; i++) await wl(b.code, '000111', NOW, `${9000 + i}`);
+    expect((await wl(a.code, '482917', min(1))).ok).toBe(true);
+    expect(await wl(b.code, '482917', min(1))).toMatchObject({ ok: false, code: 'LOCKED' });
   });
 });
 

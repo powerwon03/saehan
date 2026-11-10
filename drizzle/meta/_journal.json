@@ -22,6 +22,13 @@
       "when": 1794305817989,
       "tag": "0002_sub_requests_overdue_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794306481798,
+      "tag": "0003_login_failures",
+      "breakpoints": true
     }
   ]
 }

@@ -23,3 +23,22 @@ export function strongEnough(kind: 'admin' | 'worker', next: string): boolean {
   if (/^(\d)\1{5}$/.test(next)) return false;
   return next !== '123456' && next !== '654321';
 }
+
+/** Fills the buffer with cryptographically random bytes (Web Crypto: browser and Node alike). */
+const cryptoBytes = (buf: Uint8Array): Uint8Array => crypto.getRandomValues(buf);
+
+/**
+ * Random initial / reset worker PIN that passes strongEnough. Bytes ≥ 250 are skipped so every digit is equally
+ * likely; weak results (all the same, 123456, 654321) are drawn again.
+ */
+export function randomPin(random: (buf: Uint8Array) => Uint8Array = cryptoBytes): string {
+  for (;;) {
+    let pin = '';
+    while (pin.length < 6) {
+      for (const b of random(new Uint8Array(16))) {
+        if (b < 250 && pin.length < 6) pin += String(b % 10);
+      }
+    }
+    if (strongEnough('worker', pin)) return pin;
+  }
+}

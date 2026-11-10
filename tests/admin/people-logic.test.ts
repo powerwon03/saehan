@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { createPayload, emptyForm, formFromPerson, isLocked, patchPayload, type PersonRow } from '@/components/admin/people/logic';
+import { randomPin, strongEnough } from '@/lib/personRules';
 
 const person: PersonRow = {
   id: 'p1',
@@ -69,5 +70,30 @@ describe('isLocked', () => {
     expect(isLocked({ lockedUntil: '2026-11-10T02:59:00.000Z' }, now)).toBe(false);
     expect(isLocked({ lockedUntil: null }, now)).toBe(false);
     expect(isLocked(undefined, now)).toBe(false);
+  });
+});
+
+describe('randomPin', () => {
+  test('6자리 숫자이고 strongEnough를 통과, 매번 다르다', () => {
+    const pins = Array.from({ length: 200 }, () => randomPin());
+    for (const pin of pins) {
+      expect(pin).toMatch(/^\d{6}$/);
+      expect(strongEnough('worker', pin)).toBe(true);
+    }
+    expect(new Set(pins).size).toBeGreaterThan(190);
+  });
+
+  test('약한 PIN이 나오면 다시 뽑고, 250 이상 바이트는 버린다 (치우침 없음)', () => {
+    const draws = [
+      [0, 0, 0, 0, 0, 0], // 000000: all the same → rejected
+      [251, 4, 8, 2, 9, 1, 7], // 251 dropped → 482917
+    ];
+    const fake = (buf: Uint8Array) => {
+      const next = draws.shift() ?? [];
+      buf.fill(255);
+      buf.set(next.slice(0, buf.length));
+      return buf;
+    };
+    expect(randomPin(fake)).toBe('482917');
   });
 });

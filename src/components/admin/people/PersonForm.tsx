@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, send } from '@/lib/api';
-import { strongEnough, suggestEmpNo } from '@/lib/personRules';
+import { randomPin, strongEnough, suggestEmpNo } from '@/lib/personRules';
 import type { factories, posts } from '@/server/db/schema';
 import { Drawer } from '../common/Drawer';
 import { Field } from '../common/Field';
@@ -11,12 +11,14 @@ import { btnPrimary, input } from '../common/styles';
 import { AFFILIATION, CREWS, GENDER, LANG_NAME, errorText } from '../labels';
 import { useToast } from '../Toast';
 import { createPayload, emptyForm, formFromPerson, patchPayload, type PersonForm as Form, type PersonRow } from './logic';
+import { PinInput } from './PinInput';
 
 type FactoryRow = typeof factories.$inferSelect;
 type PostRow = typeof posts.$inferSelect;
 
 /**
- * 「신규 입사」 (person = null: 사번 prefilled with the suggestion, 초기 PIN) or 수정 (same form without PIN).
+ * 「신규 입사」 (person = null: 사번 prefilled with the suggestion, 초기 PIN prefilled with a random strong one) or 수정
+ * (same form without PIN).
  * Errors show inline; on success the drawer closes and the list refetches.
  */
 export function PersonForm({
@@ -35,7 +37,9 @@ export function PersonForm({
   const router = useRouter();
   const toast = useToast();
   const creating = person === null;
-  const [form, setForm] = useState<Form>(() => (person ? formFromPerson(person) : emptyForm(factoryList[0]?.id ?? '', '')));
+  const [form, setForm] = useState<Form>(() =>
+    person ? formFromPerson(person) : { ...emptyForm(factoryList[0]?.id ?? '', ''), pin: randomPin() },
+  );
   const [error, setError] = useState<{ code: string; pin?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -152,16 +156,9 @@ export function PersonForm({
           </select>
         </Field>
         {creating && (
-          <Field label="초기 PIN (숫자 6자리)" error={error?.pin ? errorText(error.code) : null}>
-            <input
-              className={input}
-              value={form.pin}
-              onChange={(e) => set('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={6}
-            />
-          </Field>
+          <div className="col-span-2">
+            <PinInput label="초기 PIN (숫자 6자리)" value={form.pin} onChange={(pin) => set('pin', pin)} error={error?.pin ? errorText(error.code) : null} />
+          </div>
         )}
         {creating && <p className="col-span-2 text-sm text-gray-500">처음 로그인할 때 본인이 PIN을 바꾸게 돼요.</p>}
         {error && !error.pin && (

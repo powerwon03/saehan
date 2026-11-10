@@ -359,3 +359,14 @@ export const accounts = pgTable(
   },
   (t) => [unique('accounts_company_kind_login_uq').on(t.companyId, t.kind, t.loginId)],
 );
+
+/** One row per failed worker login (wrong PIN or unknown 사번): the company-wide spray window (auth/login.ts). */
+export const loginFailures = pgTable(
+  'login_failures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    companyId: companyRef(),
+    at: ts('at').notNull(),
+  },
+  (t) => [index('login_failures_company_at_idx').on(t.companyId, t.at)],
+);

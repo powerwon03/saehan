@@ -3,12 +3,13 @@
 import { useState, type ReactNode } from 'react';
 import { seoulDate } from '@/engine/time';
 import { send, type ApiResult } from '@/lib/api';
-import { strongEnough } from '@/lib/personRules';
+import { randomPin, strongEnough } from '@/lib/personRules';
 import { Popover } from '../Popover';
 import { btnDanger, btnPrimary, btnSm, input } from '../common/styles';
 import type { RunWrite } from '../common/useWrite';
 import { errorText } from '../labels';
 import type { PersonRow } from './logic';
+import { PinInput } from './PinInput';
 
 type Mode = 'menu' | 'retire' | 'delete' | 'pin';
 
@@ -28,7 +29,7 @@ export function RowActions({ person, locked, run, busy, onEdit }: { person: Pers
     setMode(m);
     setError(null);
     if (m === 'retire') setLeftAt(seoulDate(new Date()));
-    if (m === 'pin') setPin('');
+    if (m === 'pin') setPin(randomPin());
   };
   const close = () => {
     setOpen(false);
@@ -108,18 +109,7 @@ export function RowActions({ person, locked, run, busy, onEdit }: { person: Pers
 
         {mode === 'pin' && (
           <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-600">새 PIN (숫자 6자리)</span>
-              <input
-                className={input}
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={6}
-                autoFocus
-              />
-            </label>
+            <PinInput label="새 PIN (숫자 6자리)" value={pin} onChange={setPin} autoFocus />
             <p className="text-sm text-gray-600">잠금도 함께 풀리고, 다음 로그인 때 본인이 PIN을 바꾸게 돼요.</p>
             {error && <ErrorLine code={error} />}
             <Buttons onBack={() => show('menu')}>
