@@ -15,6 +15,8 @@ export type ShiftCard = {
 
 export type WorkerView = {
   me: { name: string; empNo: string; lang: string; factoryName: string };
+  /** Seoul calendar date of `now` (differs from `today.date` during a night shift after midnight). */
+  calendarDate: DateStr;
   today: ShiftCard;
   tomorrow: ShiftCard;
   canReportAbsence: boolean;
@@ -105,6 +107,7 @@ export function workerView(snap: Snapshot, personId: string, now: Date): WorkerV
   const todayDate = seoulDate(now);
   return {
     me: { name: person.name, empNo: person.empNo, lang: person.lang, factoryName: factory.name },
+    calendarDate: todayDate,
     today,
     tomorrow,
     canReportAbsence,

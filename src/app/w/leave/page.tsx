@@ -32,8 +32,9 @@ export default function LeavePage() {
     await reload();
     setBusy(false);
   };
-  // the server's date, not the phone clock (a wrong phone clock must not shift the 14-day window)
-  const days = Array.from({ length: 14 }, (_, i) => addDays(view.today.date, i + 1));
+  // the server's calendar date: not the phone clock (a wrong phone clock must not shift the 14-day window) and not
+  // today.date (that is yesterday while a night shift runs past midnight)
+  const days = Array.from({ length: 14 }, (_, i) => addDays(view.calendarDate, i + 1));
   const active = new Map(view.leaves.filter((l) => l.status === 'pending' || l.status === 'approved').map((l) => [l.date, l.status]));
 
   return (

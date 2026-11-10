@@ -11,14 +11,15 @@ type Line = BoardView['lines'][number];
 /** Shared by the header row and LineRow so the columns line up. */
 export const LINE_GRID = 'grid grid-cols-[150px_170px_84px_52px_minmax(0,1fr)] items-center gap-3';
 
-/** One post: code·name, product (제품 마스터 + 쉼 + 무인), 세우기, 필요 인원, name chips and 「빈자리 +」 slots. */
+/**
+ * One post: code·name, product (제품 마스터 + 쉼 + 무인), 세우기, 필요 인원, name chips and 「빈자리 +」 slots.
+ * A fixed post (post.kind 'fixed') has no product and is never stopped: no product select, no 세우기 toggle.
+ */
 export function LineRow({ line }: { line: Line }) {
-  const { view, run, busy } = useBoard();
   const { post, plan, stopped } = line;
+  const fixed = post.kind === 'fixed';
   const postLabel = `${post.code} ${post.name}`;
-  const idle = stopped || plan.status !== 'run';
-  const planKey = `plan:${post.id}`;
-  const stopKey = `stop:${post.id}`;
+  const idle = !fixed && (stopped || plan.status !== 'run');
 
   return (
     <div className={`${LINE_GRID} border-b border-gray-200 px-4 py-2 ${idle ? 'bg-gray-50' : 'bg-white'}`}>
@@ -29,6 +30,39 @@ export function LineRow({ line }: { line: Line }) {
         </p>
       </div>
 
+      {fixed ? (
+        <>
+          <span className="text-sm text-gray-400">고정 자리</span>
+          <span />
+        </>
+      ) : (
+        <LineControls line={line} postLabel={postLabel} />
+      )}
+
+      <p className="text-center text-lg font-bold">{line.need}</p>
+
+      <div className="flex min-w-0 flex-wrap gap-2">
+        {line.people.map((p) => (
+          <PersonChip key={p.assignmentId} person={p} postId={post.id} postLabel={postLabel} />
+        ))}
+        {Array.from({ length: line.vacancies }, (_, i) => (
+          <VacancySlot key={i} postId={post.id} postLabel={postLabel} />
+        ))}
+        {line.people.length === 0 && line.vacancies === 0 && <span className="text-sm text-gray-400">—</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Product select and 세우기 toggle of a line post (two grid cells). */
+function LineControls({ line, postLabel }: { line: Line; postLabel: string }) {
+  const { view, run, busy } = useBoard();
+  const { post, plan, stopped } = line;
+  const planKey = `plan:${post.id}`;
+  const stopKey = `stop:${post.id}`;
+
+  return (
+    <>
       <select
         value={planValue(plan)}
         disabled={busy(planKey)}
@@ -58,18 +92,6 @@ export function LineRow({ line }: { line: Line }) {
       >
         {stopped ? '세움' : '세우기'}
       </button>
-
-      <p className="text-center text-lg font-bold">{line.need}</p>
-
-      <div className="flex min-w-0 flex-wrap gap-2">
-        {line.people.map((p) => (
-          <PersonChip key={p.assignmentId} person={p} postId={post.id} postLabel={postLabel} />
-        ))}
-        {Array.from({ length: line.vacancies }, (_, i) => (
-          <VacancySlot key={i} postId={post.id} postLabel={postLabel} />
-        ))}
-        {line.people.length === 0 && line.vacancies === 0 && <span className="text-sm text-gray-400">—</span>}
-      </div>
-    </div>
+    </>
   );
 }
